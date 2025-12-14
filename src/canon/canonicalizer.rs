@@ -12,7 +12,7 @@ use nalgebra_sparse::CscMatrix;
 
 use super::lin_expr::{LinExpr, QuadExpr};
 use crate::expr::{Array, Expr, ExprId, Shape, VariableBuilder};
-use crate::sparse::{csc_vstack, csc_repeat_rows, dense_to_csc, csc_to_dense, csc_scale, sparse_dense_matmul};
+use crate::sparse::{csc_vstack, csc_repeat_rows, dense_to_csc, csc_to_dense};
 
 /// A cone constraint in standard form: Ax + b in K.
 #[derive(Debug, Clone)]
@@ -235,18 +235,41 @@ impl CanonContext {
     }
 
     fn matmul_const_lin(&self, a: &Array, b: &LinExpr) -> LinExpr {
-        // A @ (sum_i B_i x_i + c) = sum_i (A @ B_i) x_i + A @ c
+        // For matrix expression A @ E where E has shape (m, n):
+        // vec(A @ E) = (I_n ⊗ A) @ vec(E)
+        // So for coefficient C: new_C = (I_n ⊗ A) @ C
         let a_mat = match a {
             Array::Dense(m) => m.clone(),
             Array::Scalar(v) => DMatrix::from_element(1, 1, *v),
             Array::Sparse(s) => csc_to_dense(s),
         };
 
+        let p = a_mat.nrows();  // rows of A
+        let m = b.shape.rows(); // rows of E (should equal a_mat.ncols())
+        let n = b.shape.cols(); // cols of E and result
+
         let mut new_coeffs = std::collections::HashMap::new();
         for (var_id, coeff) in &b.coeffs {
-            // A @ B_i
-            let new_coeff = dense_sparse_matmul(&a_mat, coeff);
-            new_coeffs.insert(*var_id, new_coeff);
+            // Transform coefficient using Kronecker identity:
+            // (I_n ⊗ A) @ c = vec(A @ reshape(c, m, n)) for each column c
+            let coeff_dense = csc_to_dense(coeff);
+            let var_size = coeff_dense.ncols();
+            let new_size = p * n;
+
+            let mut new_coeff_data = DMatrix::zeros(new_size, var_size);
+            for j in 0..var_size {
+                // Extract column j, reshape to (m, n), left-multiply by A, reshape back
+                let col: Vec<f64> = (0..coeff_dense.nrows()).map(|i| coeff_dense[(i, j)]).collect();
+                // Reshape to (m, n) - column-major order
+                let mat = DMatrix::from_vec(m, n, col);
+                // Left multiply by A
+                let result = &a_mat * &mat;
+                // Store back as column (column-major order)
+                for (idx, val) in result.iter().enumerate() {
+                    new_coeff_data[(idx, j)] = *val;
+                }
+            }
+            new_coeffs.insert(*var_id, dense_to_csc(&new_coeff_data));
         }
 
         let new_const = &a_mat * &b.constant;
@@ -260,18 +283,41 @@ impl CanonContext {
     }
 
     fn lin_matmul_const(&self, a: &LinExpr, b: &Array) -> LinExpr {
-        // (sum_i A_i x_i + c) @ B = sum_i (A_i @ B) x_i + c @ B
+        // For matrix expression E @ B where E has shape (m, n):
+        // vec(E @ B) = (B' ⊗ I_m) @ vec(E)
+        // So for coefficient C: new_C = (B' ⊗ I_m) @ C
         let b_mat = match b {
             Array::Dense(m) => m.clone(),
             Array::Scalar(v) => DMatrix::from_element(1, 1, *v),
             Array::Sparse(s) => csc_to_dense(s),
         };
 
+        let m = a.shape.rows(); // rows of E
+        let n = a.shape.cols(); // cols of E (should equal b_mat.nrows())
+        let p = b_mat.ncols();  // cols of result
+
         let mut new_coeffs = std::collections::HashMap::new();
         for (var_id, coeff) in &a.coeffs {
-            // A_i @ B
-            let new_coeff = sparse_dense_matmul(coeff, &b_mat);
-            new_coeffs.insert(*var_id, new_coeff);
+            // Transform coefficient using Kronecker identity:
+            // (B' ⊗ I_m) @ c = vec(reshape(c, m, n) @ B) for each column c
+            let coeff_dense = csc_to_dense(coeff);
+            let var_size = coeff_dense.ncols();
+            let new_size = m * p;
+
+            let mut new_coeff_data = DMatrix::zeros(new_size, var_size);
+            for j in 0..var_size {
+                // Extract column j, reshape to (m, n), multiply by B, reshape back
+                let col: Vec<f64> = (0..coeff_dense.nrows()).map(|i| coeff_dense[(i, j)]).collect();
+                // Reshape to (m, n) - column-major order
+                let mat = DMatrix::from_vec(m, n, col);
+                // Right multiply by B
+                let result = &mat * &b_mat;
+                // Store back as column (column-major order)
+                for (idx, val) in result.iter().enumerate() {
+                    new_coeff_data[(idx, j)] = *val;
+                }
+            }
+            new_coeffs.insert(*var_id, dense_to_csc(&new_coeff_data));
         }
 
         let new_const = &a.constant * &b_mat;

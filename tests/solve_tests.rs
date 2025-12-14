@@ -687,7 +687,7 @@ fn test_weighted_sum() {
 #[test]
 fn test_transpose_in_constraint() {
     let x = variable((2, 3)); // 2x3 matrix
-    let xt = transpose(&x);   // 3x2 matrix
+    let _xt = transpose(&x);   // 3x2 matrix
 
     // minimize sum(x) s.t. x >= 1
     let prob = Problem::minimize(sum(&x))
@@ -963,15 +963,16 @@ mod stress_tests {
         let solution = prob.solve().expect("should solve");
         assert_eq!(solution.status, SolveStatus::Optimal);
 
-        // Compute expected: A @ B = [[1,0,1], [0,1,1]] @ [[1,0], [0,0], [1,0]]
-        // Wait, dimensions don't match. Let me recalculate.
-        // A is 2x3 (2 rows, 3 cols), B is 3x2 (3 rows, 2 cols)
+        // Compute expected:
+        // A (2x3) = [[1,0,1], [0,1,1]] (row-major view)
+        // B (3x2) = [[1,0], [0,1], [0,0]] (row-major view)
         // B @ x where x is 2x1 gives 3x1
         // A @ (B @ x) gives 2x1
-        // With x = [1,1], B @ x = [1, 0, 1], A @ (B @ x) = [1+1, 0+1+1] = [2, 2]
-        // sum = 4
+        // With x = [1,1], B @ [1,1] = [1, 1, 0]
+        // A @ [1, 1, 0] = [1*1+0*1+1*0, 0*1+1*1+1*0] = [1, 1]
+        // sum = 2
         let value = solution.value.expect("should have value");
-        let expected = 4.0;
+        let expected = 2.0;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
         assert!(rel_err < STRESS_TOL, "nested matmul: expected {}, got {} (rel_err={})",
                 expected, value, rel_err);
@@ -1235,8 +1236,8 @@ mod stress_tests {
         // x[0] + x[1] = 2  (equality)
         // x[2] + x[3] >= 1 (inequality)
         // x >= 0
-        let x01 = &constant_vec(vec![1.0, 1.0, 0.0, 0.0]);
-        let x23 = &constant_vec(vec![0.0, 0.0, 1.0, 1.0]);
+        let _x01 = &constant_vec(vec![1.0, 1.0, 0.0, 0.0]);
+        let _x23 = &constant_vec(vec![0.0, 0.0, 1.0, 1.0]);
 
         // dot(x01, x) = x[0] + x[1]
         // dot(x23, x) = x[2] + x[3]

@@ -183,16 +183,18 @@ impl Problem {
             .into_iter()
             .collect();
 
-        // Add auxiliary variables from canonicalization
+        // Add auxiliary variables from objective canonicalization
         all_vars.extend(obj_canon.aux_vars);
 
         // Canonicalize constraints
         let mut all_cone_constraints: Vec<ConeConstraint> = obj_canon.constraints;
 
         for constraint in &self.constraints {
-            let canon_constraints = canonicalize_constraint(constraint);
-            // Add the cone constraints directly
-            all_cone_constraints.extend(canon_constraints);
+            let canon_result = canonicalize_constraint(constraint);
+            // Add the cone constraints
+            all_cone_constraints.extend(canon_result.cone_constraints);
+            // Add auxiliary variables from constraint canonicalization
+            all_vars.extend(canon_result.aux_vars);
         }
 
         // Stuff the problem
@@ -294,32 +296,49 @@ impl ProblemBuilder {
     }
 }
 
-/// Canonicalize a user constraint into cone constraints.
-fn canonicalize_constraint(constraint: &Constraint) -> Vec<ConeConstraint> {
+/// Result of canonicalizing a constraint.
+struct ConstraintCanonResult {
+    cone_constraints: Vec<ConeConstraint>,
+    aux_vars: Vec<(ExprId, Shape)>,
+}
+
+/// Canonicalize a user constraint into cone constraints and auxiliary variables.
+fn canonicalize_constraint(constraint: &Constraint) -> ConstraintCanonResult {
     match constraint {
         Constraint::Zero(expr) => {
             let canon = canonicalize(expr, false);
             let lin = canon.expr.as_linear().clone();
-            let mut result = vec![ConeConstraint::Zero { a: lin }];
-            result.extend(canon.constraints);
-            result
+            let mut cone_constraints = vec![ConeConstraint::Zero { a: lin }];
+            cone_constraints.extend(canon.constraints);
+            ConstraintCanonResult {
+                cone_constraints,
+                aux_vars: canon.aux_vars,
+            }
         }
         Constraint::NonNeg(expr) => {
             let canon = canonicalize(expr, false);
             let lin = canon.expr.as_linear().clone();
-            let mut result = vec![ConeConstraint::NonNeg { a: lin }];
-            result.extend(canon.constraints);
-            result
+            let mut cone_constraints = vec![ConeConstraint::NonNeg { a: lin }];
+            cone_constraints.extend(canon.constraints);
+            ConstraintCanonResult {
+                cone_constraints,
+                aux_vars: canon.aux_vars,
+            }
         }
         Constraint::SOC { t, x } => {
             let t_canon = canonicalize(t, false);
             let x_canon = canonicalize(x, false);
             let t_lin = t_canon.expr.as_linear().clone();
             let x_lin = x_canon.expr.as_linear().clone();
-            let mut result = vec![ConeConstraint::SOC { t: t_lin, x: x_lin }];
-            result.extend(t_canon.constraints);
-            result.extend(x_canon.constraints);
-            result
+            let mut cone_constraints = vec![ConeConstraint::SOC { t: t_lin, x: x_lin }];
+            cone_constraints.extend(t_canon.constraints);
+            cone_constraints.extend(x_canon.constraints);
+            let mut aux_vars = t_canon.aux_vars;
+            aux_vars.extend(x_canon.aux_vars);
+            ConstraintCanonResult {
+                cone_constraints,
+                aux_vars,
+            }
         }
     }
 }
