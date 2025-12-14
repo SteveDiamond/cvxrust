@@ -31,16 +31,36 @@ pub enum Constraint {
 }
 
 impl Constraint {
-    /// Create an equality constraint: lhs == rhs.
+    /// Broadcast scalar to match the shape of target expression.
+    fn broadcast_scalar(scalar: &Expr, target_shape: &crate::expr::Shape) -> Expr {
+        use crate::expr::{constant, ones};
+
+        // Extract scalar value if it's a constant
+        if let Expr::Constant(data) = scalar {
+            if let Some(val) = data.value.as_scalar() {
+                if target_shape.is_scalar() {
+                    return scalar.clone();
+                }
+                // Broadcast: scalar * ones(shape)
+                return constant(val) * ones(target_shape.clone());
+            }
+        }
+        // Not a scalar constant, return as-is
+        scalar.clone()
+    }
+
+    /// Create an equality constraint: lhs == rhs (with broadcasting).
     pub fn eq(lhs: Expr, rhs: Expr) -> Self {
+        let (lhs, rhs) = Self::broadcast_if_needed(lhs, rhs);
         Constraint::Zero(Arc::new(Expr::Add(
             Arc::new(lhs),
             Arc::new(Expr::Neg(Arc::new(rhs))),
         )))
     }
 
-    /// Create an inequality constraint: lhs <= rhs.
+    /// Create an inequality constraint: lhs <= rhs (with broadcasting).
     pub fn leq(lhs: Expr, rhs: Expr) -> Self {
+        let (lhs, rhs) = Self::broadcast_if_needed(lhs, rhs);
         // lhs <= rhs  <=>  rhs - lhs >= 0
         Constraint::NonNeg(Arc::new(Expr::Add(
             Arc::new(rhs),
@@ -48,13 +68,35 @@ impl Constraint {
         )))
     }
 
-    /// Create an inequality constraint: lhs >= rhs.
+    /// Create an inequality constraint: lhs >= rhs (with broadcasting).
     pub fn geq(lhs: Expr, rhs: Expr) -> Self {
+        let (lhs, rhs) = Self::broadcast_if_needed(lhs, rhs);
         // lhs >= rhs  <=>  lhs - rhs >= 0
         Constraint::NonNeg(Arc::new(Expr::Add(
             Arc::new(lhs),
             Arc::new(Expr::Neg(Arc::new(rhs))),
         )))
+    }
+
+    /// Broadcast scalars to match shapes if needed.
+    fn broadcast_if_needed(lhs: Expr, rhs: Expr) -> (Expr, Expr) {
+        let lhs_shape = lhs.shape();
+        let rhs_shape = rhs.shape();
+
+        // If shapes match, no broadcasting needed
+        if lhs_shape == rhs_shape {
+            return (lhs, rhs);
+        }
+
+        // Broadcast scalar to match non-scalar
+        if lhs_shape.is_scalar() && !rhs_shape.is_scalar() {
+            (Self::broadcast_scalar(&lhs, &rhs_shape), rhs)
+        } else if rhs_shape.is_scalar() && !lhs_shape.is_scalar() {
+            (lhs, Self::broadcast_scalar(&rhs, &lhs_shape))
+        } else {
+            // Shapes don't match and neither is scalar - return as-is, will error later
+            (lhs, rhs)
+        }
     }
 
     /// Create a SOC constraint: ||x||_2 <= t.
@@ -110,6 +152,15 @@ pub trait ConstraintExt {
 
     /// Create inequality constraint: self >= rhs.
     fn geq(&self, rhs: &Expr) -> Constraint;
+
+    /// Create equality constraint: self == rhs (short form with auto-conversion).
+    fn eq<E: Into<Expr>>(&self, rhs: E) -> Constraint;
+
+    /// Create inequality constraint: self <= rhs (short form with auto-conversion).
+    fn le<E: Into<Expr>>(&self, rhs: E) -> Constraint;
+
+    /// Create inequality constraint: self >= rhs (short form with auto-conversion).
+    fn ge<E: Into<Expr>>(&self, rhs: E) -> Constraint;
 }
 
 impl ConstraintExt for Expr {
@@ -124,6 +175,70 @@ impl ConstraintExt for Expr {
     fn geq(&self, rhs: &Expr) -> Constraint {
         Constraint::geq(self.clone(), rhs.clone())
     }
+
+    fn eq<E: Into<Expr>>(&self, rhs: E) -> Constraint {
+        Constraint::eq(self.clone(), rhs.into())
+    }
+
+    fn le<E: Into<Expr>>(&self, rhs: E) -> Constraint {
+        Constraint::leq(self.clone(), rhs.into())
+    }
+
+    fn ge<E: Into<Expr>>(&self, rhs: E) -> Constraint {
+        Constraint::geq(self.clone(), rhs.into())
+    }
+}
+
+/// Macro for creating constraints with operator syntax.
+///
+/// # Examples
+///
+/// ```
+/// use cvxrust::prelude::*;
+///
+/// let x = variable(5);
+/// let c1 = constraint!(x >= 1.0);
+/// let c2 = constraint!(x <= 10.0);
+/// let c3 = constraint!(x == 5.0);
+/// ```
+#[macro_export]
+macro_rules! constraint {
+    ($lhs:tt >= $rhs:tt) => {
+        $crate::constraints::ConstraintExt::ge(&$lhs, $rhs)
+    };
+    ($lhs:tt <= $rhs:tt) => {
+        $crate::constraints::ConstraintExt::le(&$lhs, $rhs)
+    };
+    ($lhs:tt == $rhs:tt) => {
+        $crate::constraints::ConstraintExt::eq(&$lhs, $rhs)
+    };
+    (($($lhs:tt)+) >= $rhs:tt) => {
+        $crate::constraints::ConstraintExt::ge(&($($lhs)+), $rhs)
+    };
+    (($($lhs:tt)+) <= $rhs:tt) => {
+        $crate::constraints::ConstraintExt::le(&($($lhs)+), $rhs)
+    };
+    (($($lhs:tt)+) == $rhs:tt) => {
+        $crate::constraints::ConstraintExt::eq(&($($lhs)+), $rhs)
+    };
+    ($lhs:tt >= ($($rhs:tt)+)) => {
+        $crate::constraints::ConstraintExt::ge(&$lhs, ($($rhs)+))
+    };
+    ($lhs:tt <= ($($rhs:tt)+)) => {
+        $crate::constraints::ConstraintExt::le(&$lhs, ($($rhs)+))
+    };
+    ($lhs:tt == ($($rhs:tt)+)) => {
+        $crate::constraints::ConstraintExt::eq(&$lhs, ($($rhs)+))
+    };
+    (($($lhs:tt)+) >= ($($rhs:tt)+)) => {
+        $crate::constraints::ConstraintExt::ge(&($($lhs)+), ($($rhs)+))
+    };
+    (($($lhs:tt)+) <= ($($rhs:tt)+)) => {
+        $crate::constraints::ConstraintExt::le(&($($lhs)+), ($($rhs)+))
+    };
+    (($($lhs:tt)+) == ($($rhs:tt)+)) => {
+        $crate::constraints::ConstraintExt::eq(&($($lhs)+), ($($rhs)+))
+    };
 }
 
 #[cfg(test)]
@@ -191,5 +306,65 @@ mod tests {
         let x = variable(5);
         let leq_constr = x.leq(&c);
         assert!(leq_constr.is_dcp());
+    }
+
+    #[test]
+    fn test_broadcasting_scalar_to_vector() {
+        // Test that x >= 0.0 broadcasts 0.0 to match x's shape
+        let x = variable(5);
+        let constr = x.ge(0.0);
+        assert!(constr.is_dcp());
+
+        // Verify it's a NonNeg constraint
+        if let Constraint::NonNeg(_) = constr {
+            // OK
+        } else {
+            panic!("Expected NonNeg constraint");
+        }
+    }
+
+    #[test]
+    fn test_broadcasting_with_macro() {
+        let x = variable(3);
+
+        // Test >= with broadcasting
+        let c1 = constraint!(x >= 0.0);
+        assert!(c1.is_dcp());
+
+        // Test <= with broadcasting
+        let c2 = constraint!(x <= 10.0);
+        assert!(c2.is_dcp());
+
+        // Test == with broadcasting
+        let c3 = constraint!(x == 5.0);
+        assert!(c3.is_dcp());
+    }
+
+    #[test]
+    fn test_no_broadcasting_when_shapes_match() {
+        use crate::expr::zeros;
+
+        // When shapes already match, no broadcasting needed
+        let x = variable(4);
+        let z = zeros(4);
+        let constr = x.ge(z);
+        assert!(constr.is_dcp());
+    }
+
+    #[test]
+    fn test_new_short_methods() {
+        let x = variable(5);
+
+        // Test new .ge(), .le(), .eq() methods with scalar auto-conversion
+        let c1 = x.ge(1.0);
+        assert!(c1.is_dcp());
+
+        let x2 = variable(5);
+        let c2 = x2.le(10.0);
+        assert!(c2.is_dcp());
+
+        let x3 = variable(5);
+        let c3 = x3.eq(5.0);
+        assert!(c3.is_dcp());
     }
 }

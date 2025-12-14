@@ -444,6 +444,25 @@ impl Expr {
     }
 }
 
+// Convenient From implementations for automatic conversion
+impl From<f64> for Expr {
+    fn from(value: f64) -> Self {
+        crate::expr::constant(value)
+    }
+}
+
+impl From<i32> for Expr {
+    fn from(value: i32) -> Self {
+        crate::expr::constant(value as f64)
+    }
+}
+
+impl From<&Expr> for Expr {
+    fn from(expr: &Expr) -> Self {
+        expr.clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

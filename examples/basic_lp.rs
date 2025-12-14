@@ -40,8 +40,8 @@ fn main() {
     println!("Solving...");
     let solution = Problem::minimize(objective)
         .subject_to([
-            matmul(&a, &x).leq(&b),
-            x.clone().geq(&zeros(3)),
+            constraint!((matmul(&a, &x)) <= b),
+            constraint!(x >= 0.0),
         ])
         .solve()
         .expect("Failed to solve");
@@ -51,12 +51,8 @@ fn main() {
     println!("  Status: {:?}", solution.status);
     println!("  Optimal profit: {:.4}", -solution.value.unwrap());
 
-    let x_val = solution.get_value(x.variable_id().unwrap()).unwrap();
-    let x_mat = match x_val {
-        Array::Dense(m) => m,
-        _ => panic!("Expected dense array"),
-    };
-    println!("  x1 = {:.4}", x_mat[(0, 0)]);
-    println!("  x2 = {:.4}", x_mat[(1, 0)]);
-    println!("  x3 = {:.4}", x_mat[(2, 0)]);
+    let x_vals = &solution[&x];
+    println!("  x1 = {:.4}", x_vals[(0, 0)]);
+    println!("  x2 = {:.4}", x_vals[(1, 0)]);
+    println!("  x3 = {:.4}", x_vals[(2, 0)]);
 }

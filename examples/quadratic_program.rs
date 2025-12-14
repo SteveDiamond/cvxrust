@@ -26,8 +26,8 @@ fn main() {
     println!("Solving...");
     let solution = Problem::minimize(objective)
         .subject_to([
-            sum(&x).equals(&constant(4.0)),
-            x.clone().geq(&zeros(2)),
+            constraint!((sum(&x)) == 4.0),
+            constraint!(x >= 0.0),
         ])
         .solve()
         .expect("Failed to solve");
@@ -36,13 +36,9 @@ fn main() {
     println!("  Status: {:?}", solution.status);
     println!("  Optimal value: {:.6}", solution.value.unwrap());
 
-    let x_val = solution.get_value(x.variable_id().unwrap()).unwrap();
-    let x_mat = match x_val {
-        Array::Dense(m) => m,
-        _ => panic!("Expected dense array"),
-    };
-    println!("  x1 = {:.6}", x_mat[(0, 0)]);
-    println!("  x2 = {:.6}", x_mat[(1, 0)]);
-    println!("  Sum: {:.6}", x_mat[(0, 0)] + x_mat[(1, 0)]);
+    let x_vals = &solution[&x];
+    println!("  x1 = {:.6}", x_vals[(0, 0)]);
+    println!("  x2 = {:.6}", x_vals[(1, 0)]);
+    println!("  Sum: {:.6}", x_vals[(0, 0)] + x_vals[(1, 0)]);
     println!("  Distance: {:.6}", solution.value.unwrap().sqrt());
 }

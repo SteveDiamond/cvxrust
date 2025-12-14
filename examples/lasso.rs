@@ -38,14 +38,10 @@ fn main() {
         .solve()
         .expect("Failed to solve");
 
-    let x_ls_val = solution_ls.get_value(x_ls.variable_id().unwrap()).unwrap();
-    let x_ls_mat = match x_ls_val {
-        Array::Dense(m) => m,
-        _ => panic!("Expected dense array"),
-    };
+    let x_ls_vals = &solution_ls[&x_ls];
     println!("Coefficients:");
     for i in 0..10 {
-        println!("  x{}: {:.6}", i + 1, x_ls_mat[(i, 0)]);
+        println!("  x{}: {:.6}", i + 1, x_ls_vals[(i, 0)]);
     }
     println!("  Objective: {:.6}", solution_ls.value.unwrap());
 
@@ -61,14 +57,10 @@ fn main() {
         .solve()
         .expect("Failed to solve");
 
-    let x_val = solution.get_value(x.variable_id().unwrap()).unwrap();
-    let x_mat = match x_val {
-        Array::Dense(m) => m,
-        _ => panic!("Expected dense array"),
-    };
+    let x_vals = &solution[&x];
     println!("Coefficients:");
     for i in 0..10 {
-        let val = x_mat[(i, 0)];
+        let val = x_vals[(i, 0)];
         let marker = if val.abs() > 0.1 { " <--" } else { "" };
         println!("  x{}: {:.6}{}", i + 1, val, marker);
     }
@@ -86,14 +78,10 @@ fn main() {
         .solve()
         .expect("Failed to solve");
 
-    let x2_val = solution2.get_value(x2.variable_id().unwrap()).unwrap();
-    let x2_mat = match x2_val {
-        Array::Dense(m) => m,
-        _ => panic!("Expected dense array"),
-    };
+    let x2_vals = &solution2[&x2];
     println!("Coefficients:");
     for i in 0..10 {
-        let val = x2_mat[(i, 0)];
+        let val = x2_vals[(i, 0)];
         let marker = if val.abs() > 0.1 { " <--" } else { "" };
         println!("  x{}: {:.6}{}", i + 1, val, marker);
     }

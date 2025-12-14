@@ -34,13 +34,9 @@ fn main() {
     println!("  Status: {:?}", solution.status);
     println!("  Optimal value: {:.6}", solution.value.unwrap());
 
-    let w_val = solution.get_value(w.variable_id().unwrap()).unwrap();
-    let w_mat = match w_val {
-        Array::Dense(m) => m,
-        _ => panic!("Expected dense array"),
-    };
-    println!("  w0 (intercept) = {:.6}", w_mat[(0, 0)]);
-    println!("  w1 (slope) = {:.6}", w_mat[(1, 0)]);
+    let w_vals = &solution[&w];
+    println!("  w0 (intercept) = {:.6}", w_vals[(0, 0)]);
+    println!("  w1 (slope) = {:.6}", w_vals[(1, 0)]);
 
     // Constrained least squares (w >= 0)
     println!("\n--- Constrained Least Squares (w >= 0) ---\n");
@@ -49,7 +45,7 @@ fn main() {
     let residual2 = matmul(&a, &w2) - &b;
 
     let solution2 = Problem::minimize(sum_squares(&residual2))
-        .constraint(w2.clone().geq(&zeros(2)))
+        .constraint(constraint!(w2 >= 0.0))
         .solve()
         .expect("Failed to solve");
 
@@ -57,11 +53,7 @@ fn main() {
     println!("  Status: {:?}", solution2.status);
     println!("  Optimal value: {:.6}", solution2.value.unwrap());
 
-    let w2_val = solution2.get_value(w2.variable_id().unwrap()).unwrap();
-    let w2_mat = match w2_val {
-        Array::Dense(m) => m,
-        _ => panic!("Expected dense array"),
-    };
-    println!("  w0 (intercept) = {:.6}", w2_mat[(0, 0)]);
-    println!("  w1 (slope) = {:.6}", w2_mat[(1, 0)]);
+    let w2_vals = &solution2[&w2];
+    println!("  w0 (intercept) = {:.6}", w2_vals[(0, 0)]);
+    println!("  w1 (slope) = {:.6}", w2_vals[(1, 0)]);
 }

@@ -92,6 +92,69 @@ impl Solution {
     pub fn get_value(&self, var_id: ExprId) -> Option<&Array> {
         self.primal.as_ref().and_then(|p| p.get(&var_id))
     }
+
+    /// Get scalar value for a variable. Panics if variable is not found or not scalar.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cvxrust::prelude::*;
+    ///
+    /// let x = variable(());
+    /// let solution = Problem::minimize(x.clone())
+    ///     .subject_to([x.ge(1.0)])
+    ///     .solve()
+    ///     .unwrap();
+    ///
+    /// let x_val = solution.value(&x);
+    /// ```
+    pub fn value(&self, var: &crate::expr::Expr) -> f64 {
+        let var_id = var
+            .variable_id()
+            .expect("Expression is not a variable");
+        match self.get_value(var_id).expect("Variable not in solution") {
+            Array::Scalar(v) => *v,
+            Array::Dense(m) if m.nrows() == 1 && m.ncols() == 1 => m[(0, 0)],
+            _ => panic!("Variable is not scalar"),
+        }
+    }
+}
+
+impl std::ops::Index<&crate::expr::Expr> for Solution {
+    type Output = nalgebra::DMatrix<f64>;
+
+    /// Get matrix/vector value for a variable using index operator.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the variable is not found or is a scalar (use `.value()` for scalars).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cvxrust::prelude::*;
+    ///
+    /// let x = variable(5);
+    /// let solution = Problem::minimize(sum(&x))
+    ///     .subject_to([x.ge(1.0)])
+    ///     .solve()
+    ///     .unwrap();
+    ///
+    /// let x_vals = &solution[&x];
+    /// println!("x[0] = {}", x_vals[(0, 0)]);
+    /// ```
+    fn index(&self, var: &crate::expr::Expr) -> &nalgebra::DMatrix<f64> {
+        let var_id = var
+            .variable_id()
+            .expect("Expression is not a variable");
+        match self.get_value(var_id).expect("Variable not in solution") {
+            Array::Dense(m) => m,
+            Array::Scalar(_) => {
+                panic!("Variable is scalar, use .value() method instead of indexing")
+            }
+            Array::Sparse(_) => unreachable!("Solution values are never sparse"),
+        }
+    }
 }
 
 /// Solve the stuffed problem using Clarabel.

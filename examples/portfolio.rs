@@ -38,24 +38,20 @@ fn main() {
     let target_return = 0.09;
     let solution = Problem::minimize(risk)
         .subject_to([
-            dot(&mu, &x).geq(&constant(target_return)),
-            sum(&x).equals(&constant(1.0)),
-            x.clone().geq(&zeros(4)),
+            constraint!((dot(&mu, &x)) >= target_return),
+            constraint!((sum(&x)) == 1.0),
+            constraint!(x >= 0.0),
         ])
         .solve()
         .expect("Failed to solve");
 
     // Results
     println!("Optimal Portfolio:");
-    let x_val = solution.get_value(x.variable_id().unwrap()).unwrap();
-    let x_mat = match x_val {
-        Array::Dense(m) => m,
-        _ => panic!("Expected dense array"),
-    };
+    let portfolio = &solution[&x];
     let assets = ["A", "B", "C", "D"];
 
     for i in 0..4 {
-        println!("  Asset {}: {:.2}%", assets[i], x_mat[(i, 0)] * 100.0);
+        println!("  Asset {}: {:.2}%", assets[i], portfolio[(i, 0)] * 100.0);
     }
 
     let variance = solution.value.unwrap();
@@ -74,9 +70,9 @@ fn main() {
 
         if let Ok(sol) = Problem::minimize(risk_y)
             .subject_to([
-                dot(&mu, &y).geq(&constant(target)),
-                sum(&y).equals(&constant(1.0)),
-                y.clone().geq(&zeros(4)),
+                constraint!((dot(&mu, &y)) >= target),
+                constraint!((sum(&y)) == 1.0),
+                constraint!(y >= 0.0),
             ])
             .solve()
         {
