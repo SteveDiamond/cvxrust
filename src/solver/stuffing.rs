@@ -138,16 +138,15 @@ fn stuff_objective(objective: &QuadExpr, var_map: &VariableMap) -> (CscMatrix<f6
             for (row, col, val) in coeff.triplet_iter() {
                 let global_row = start_i + row;
                 let global_col = start_j + col;
-                // P should be symmetric; store upper triangle
+                // P should be symmetric; Clarabel expects upper triangle only.
+                // Since P is already symmetric, only keep upper triangle entries
+                // (don't swap lower entries - they would double-count).
                 if global_row <= global_col {
                     p_rows.push(global_row);
                     p_cols.push(global_col);
                     p_vals.push(*val);
-                } else {
-                    p_rows.push(global_col);
-                    p_cols.push(global_row);
-                    p_vals.push(*val);
                 }
+                // Skip lower triangle entries - the upper triangle already has them
             }
         }
     }
