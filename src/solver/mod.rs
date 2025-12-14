@@ -7,5 +7,5 @@
 pub mod clarabel;
 pub mod stuffing;
 
-pub use clarabel::{solve, Settings, Solution, SolveStatus};
+pub use self::clarabel::{solve, Settings, Solution, SolveStatus};
 pub use stuffing::{stuff_problem, ConeDims, StuffedProblem, VariableMap};

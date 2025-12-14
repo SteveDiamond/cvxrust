@@ -215,7 +215,7 @@ let solution = Problem::minimize(log_sum_exp_loss)
 
 ## DCP Rules
 
-cvxrust enforces disciplined convex programming rules:
+cvxrust enforces [Disciplined Convex Programming](https://dcp.stanford.edu/) rules:
 
 **Objective:**
 - `minimize(convex)` or `maximize(concave)`
@@ -225,7 +225,9 @@ cvxrust enforces disciplined convex programming rules:
 - `concave >= convex`
 - `affine == affine`
 
-Problems that violate these rules will return a `DcpError`.
+Curvature is determined by DCP composition rules - for example, `convex + convex = convex`, and `nonneg * convex = convex`. See [dcp.stanford.edu](https://dcp.stanford.edu/) for a complete reference.
+
+Problems that violate DCP rules will return a `DcpError`.
 
 ## Architecture
 

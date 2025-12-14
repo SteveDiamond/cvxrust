@@ -27,10 +27,13 @@
 //!
 //! ## DCP Rules
 //!
-//! cvxrust enforces Disciplined Convex Programming rules:
+//! cvxrust enforces [Disciplined Convex Programming](https://dcp.stanford.edu/) rules:
 //!
 //! - **Objective:** `minimize(convex)` or `maximize(concave)`
 //! - **Constraints:** `convex <= concave`, `concave >= convex`, `affine == affine`
+//!
+//! Curvature follows DCP composition rules (e.g., `convex + convex = convex`).
+//! See <https://dcp.stanford.edu/> for details.
 //!
 //! ## Supported Atoms
 //!
