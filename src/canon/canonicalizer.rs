@@ -12,7 +12,7 @@ use nalgebra_sparse::CscMatrix;
 
 use super::lin_expr::{LinExpr, QuadExpr};
 use crate::expr::{Array, Expr, ExprId, Shape, VariableBuilder};
-use crate::sparse::{csc_vstack, csc_repeat_rows, dense_to_csc, csc_to_dense};
+use crate::sparse::{csc_vstack, csc_repeat_rows, dense_to_csc, csc_to_dense, csc_scale};
 
 /// A cone constraint in standard form: Ax + b in K.
 #[derive(Debug, Clone)]
@@ -110,7 +110,11 @@ impl CanonContext {
         let var = VariableBuilder::new(shape.clone()).nonneg().build();
         let var_id = var.variable_id().unwrap();
         self.aux_vars.push((var_id, shape.clone()));
-        (var_id, LinExpr::variable(var_id, shape))
+        let lin_var = LinExpr::variable(var_id, shape);
+        // Add t >= 0 constraint
+        self.constraints
+            .push(ConeConstraint::NonNeg { a: lin_var.clone() });
+        (var_id, lin_var)
     }
 
     /// Canonicalize an expression.
@@ -544,12 +548,14 @@ impl CanonContext {
     fn canonicalize_sum_squares_lin(&mut self, x: &LinExpr, for_objective: bool) -> CanonExpr {
         if for_objective {
             // For objective, use native QP: ||x||^2 = x' I x
+            // Clarabel objective is (1/2) x' P x, so P = 2I to get x' I x
             let vars = x.variables();
             if vars.len() == 1 && x.constant.iter().all(|&v| v == 0.0) {
                 let var_id = vars[0];
                 let size = x.size();
-                let identity = CscMatrix::identity(size);
-                return CanonExpr::Quadratic(QuadExpr::quadratic(var_id, identity));
+                // Use 2*I since Clarabel uses (1/2) x' P x form
+                let two_identity = csc_scale(&CscMatrix::identity(size), 2.0);
+                return CanonExpr::Quadratic(QuadExpr::quadratic(var_id, two_identity));
             }
         }
 
@@ -679,8 +685,8 @@ mod tests {
         let x = variable(5);
         let n = Expr::Norm2(Arc::new(x));
         let result = canonicalize(&n, false);
-        // Should have 1 SOC constraint and 1 aux variable
-        assert_eq!(result.constraints.len(), 1);
+        // Should have 1 SOC constraint + 1 NonNeg (t >= 0), and 1 aux variable
+        assert_eq!(result.constraints.len(), 2);
         assert_eq!(result.aux_vars.len(), 1);
     }
 

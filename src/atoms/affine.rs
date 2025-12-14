@@ -324,7 +324,7 @@ mod tests {
     fn test_affine_is_affine() {
         let x = variable(5);
         let y = variable(5);
-        let c = constant(2.0);
+        let _c = constant(2.0);
 
         // x + y is affine
         let z = &x + &y;

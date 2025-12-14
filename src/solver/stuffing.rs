@@ -77,6 +77,8 @@ pub struct StuffedProblem {
     pub cone_dims: ConeDims,
     /// Variable mapping for solution recovery.
     pub var_map: VariableMap,
+    /// Constant offset in objective.
+    pub objective_offset: f64,
 }
 
 /// Build the stuffed problem from canonicalized components.
@@ -100,6 +102,7 @@ pub fn stuff_problem(
         b,
         cone_dims,
         var_map,
+        objective_offset: objective.constant,
     }
 }
 

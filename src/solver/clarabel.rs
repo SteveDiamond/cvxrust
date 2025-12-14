@@ -122,7 +122,8 @@ pub fn solve(problem: &StuffedProblem, settings: &Settings) -> Solution {
 
     if status == SolveStatus::Optimal {
         let primal = unpack_primal(&solver.solution.x, &problem.var_map);
-        let value = compute_objective(&solver.solution.x, &problem.p, &problem.q);
+        let value = compute_objective(&solver.solution.x, &problem.p, &problem.q)
+            + problem.objective_offset;
 
         Solution {
             status,

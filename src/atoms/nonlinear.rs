@@ -177,7 +177,7 @@ pub fn quad_over_lin(x: &Expr, y: &Expr) -> Expr {
 mod tests {
     use super::*;
     use crate::dcp::Curvature;
-    use crate::expr::{constant, variable};
+    use crate::expr::variable;
 
     #[test]
     fn test_norm2_convex() {
