@@ -7,7 +7,7 @@ description = "A Rust implementation of Disciplined Convex Programming"
 license = "Apache-2.0"
 repository = "https://github.com/cvxpy/cvxrust"
 documentation = "https://docs.rs/cvxrust"
-keywords = ["optimization", "convex", "dcp", "solver", "mathematical-optimization"]
+keywords = ["optimization", "convex", "dcp", "solver", "math"]
 categories = ["mathematics", "algorithms", "science"]
 rust-version = "1.70"
 
