@@ -173,6 +173,47 @@ pub fn quad_over_lin(x: &Expr, y: &Expr) -> Expr {
     Expr::QuadOverLin(Arc::new(x.clone()), Arc::new(y.clone()))
 }
 
+/// Exponential function (elementwise): exp(x)
+///
+/// Convex when x is affine.
+pub fn exp(x: &Expr) -> Expr {
+    Expr::Exp(Arc::new(x.clone()))
+}
+
+/// Natural logarithm (elementwise): log(x)
+///
+/// Concave when x is concave (and positive).
+pub fn log(x: &Expr) -> Expr {
+    Expr::Log(Arc::new(x.clone()))
+}
+
+/// Entropy (elementwise): -x * log(x)
+///
+/// Concave when x is affine (and positive).
+/// Note: v1.0 implementation is simplified for scalar/small vectors.
+pub fn entropy(x: &Expr) -> Expr {
+    Expr::Entropy(Arc::new(x.clone()))
+}
+
+/// Power function (elementwise): x^p
+///
+/// - p > 1 or p < 0: Convex when x is affine and nonnegative
+/// - 0 < p < 1: Concave when x is affine and nonnegative
+/// - p = 1: Affine
+/// - p = 2: Same as sum_squares (but less efficient)
+///
+/// Uses native power cones for better performance than exp/log reformulation.
+pub fn power(x: &Expr, p: f64) -> Expr {
+    Expr::Power(Arc::new(x.clone()), p)
+}
+
+/// Square root: sqrt(x) = x^0.5
+///
+/// Concave when x is affine and nonnegative.
+pub fn sqrt(x: &Expr) -> Expr {
+    power(x, 0.5)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

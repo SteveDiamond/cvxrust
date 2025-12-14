@@ -118,6 +118,67 @@ impl Solution {
             _ => panic!("Variable is not scalar"),
         }
     }
+
+    /// Get all dual variable values (Lagrange multipliers).
+    ///
+    /// Returns the dual values for all constraints in order:
+    /// 1. Zero cone (equality constraints)
+    /// 2. NonNeg cone (inequality constraints)
+    /// 3. SOC constraints
+    /// 4. Exponential cone constraints (3 duals per cone)
+    /// 5. Power cone constraints (3 duals per cone)
+    ///
+    /// Returns `None` if the problem was not solved.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cvxrust::prelude::*;
+    ///
+    /// let x = variable(2);
+    /// let solution = Problem::minimize(sum(&x))
+    ///     .subject_to([x.geq(&constant(1.0))])
+    ///     .solve()
+    ///     .unwrap();
+    ///
+    /// if let Some(duals) = solution.duals() {
+    ///     println!("Dual values: {:?}", duals);
+    /// }
+    /// ```
+    pub fn duals(&self) -> Option<&[f64]> {
+        self.dual.as_ref().map(|d| d.as_slice())
+    }
+
+    /// Get the dual value for a specific constraint by index.
+    ///
+    /// The constraint index corresponds to the order constraints were added to the problem.
+    /// Returns `None` if the problem was not solved or the index is out of bounds.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cvxrust::prelude::*;
+    ///
+    /// let x = variable(2);
+    /// let solution = Problem::minimize(sum(&x))
+    ///     .subject_to([
+    ///         x.geq(&constant(1.0)),  // Constraint 0
+    ///     ])
+    ///     .solve()
+    ///     .unwrap();
+    ///
+    /// if let Some(dual_0) = solution.constraint_dual(0) {
+    ///     println!("Shadow price of first constraint: {}", dual_0);
+    /// }
+    /// ```
+    pub fn constraint_dual(&self, idx: usize) -> Option<f64> {
+        self.dual.as_ref().and_then(|d| d.get(idx).copied())
+    }
+
+    /// Check if the solution has dual values available.
+    pub fn has_duals(&self) -> bool {
+        self.dual.is_some()
+    }
 }
 
 impl std::ops::Index<&crate::expr::Expr> for Solution {
@@ -235,6 +296,16 @@ fn to_clarabel_cones(dims: &ConeDims) -> Vec<SupportedConeT<f64>> {
         cones.push(SupportedConeT::SecondOrderConeT(soc_dim));
     }
 
+    // Exponential cones (each is 3D)
+    for _ in 0..dims.exp {
+        cones.push(SupportedConeT::ExponentialConeT());
+    }
+
+    // Power cones (each is 3D with its own alpha)
+    for &alpha in &dims.power {
+        cones.push(SupportedConeT::PowerConeT(alpha));
+    }
+
     cones
 }
 
@@ -291,6 +362,8 @@ mod tests {
             zero: 2,
             nonneg: 3,
             soc: vec![4],
+            exp: 0,
+            power: vec![],
         };
         let cones = to_clarabel_cones(&dims);
         assert_eq!(cones.len(), 3);

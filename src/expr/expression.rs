@@ -275,6 +275,20 @@ pub enum Expr {
     SumSquares(Arc<Expr>),
     /// Quadratic over linear: ||x||_2^2 / y
     QuadOverLin(Arc<Expr>, Arc<Expr>),
+    /// Exponential: exp(x) (elementwise).
+    Exp(Arc<Expr>),
+    /// Natural logarithm: log(x) (elementwise).
+    Log(Arc<Expr>),
+    /// Entropy: -x * log(x) (elementwise).
+    Entropy(Arc<Expr>),
+    /// Power: x^p (elementwise).
+    Power(Arc<Expr>, f64),
+
+    // ========== Additional affine atoms ==========
+    /// Cumulative sum along axis.
+    Cumsum(Arc<Expr>, Option<usize>),
+    /// Diagonal matrix from vector (or diagonal of matrix).
+    Diag(Arc<Expr>),
 }
 
 impl Expr {
@@ -359,6 +373,22 @@ impl Expr {
                 }
             }
             Expr::QuadForm(_, _) | Expr::SumSquares(_) | Expr::QuadOverLin(_, _) => Shape::scalar(),
+            // Exponential cone atoms (elementwise)
+            Expr::Exp(a) | Expr::Log(a) | Expr::Entropy(a) | Expr::Power(a, _) => a.shape(),
+            // Additional affine atoms
+            Expr::Cumsum(a, _) => a.shape(),
+            Expr::Diag(a) => {
+                let s = a.shape();
+                if s.is_vector() {
+                    // Vector to diagonal matrix: n -> (n, n)
+                    let n = s.size();
+                    Shape::matrix(n, n)
+                } else {
+                    // Matrix to diagonal vector: (m, n) -> min(m,n)
+                    let n = s.rows().min(s.cols());
+                    Shape::vector(n)
+                }
+            }
         }
     }
 
@@ -439,6 +469,14 @@ impl Expr {
             Expr::QuadForm(x, p) | Expr::QuadOverLin(x, p) => {
                 x.collect_variables(vars);
                 p.collect_variables(vars);
+            }
+            // Exponential cone atoms
+            Expr::Exp(a) | Expr::Log(a) | Expr::Entropy(a) | Expr::Power(a, _) => {
+                a.collect_variables(vars);
+            }
+            // Additional affine atoms
+            Expr::Cumsum(a, _) | Expr::Diag(a) => {
+                a.collect_variables(vars);
             }
         }
     }

@@ -29,6 +29,28 @@ pub enum ConeConstraint {
         /// The vector x expression.
         x: LinExpr,
     },
+    /// Exponential cone: {(x, y, z) | y ≥ 0, y*exp(x/y) ≤ z} ∪ {(x,y,z) | x ≤ 0, y = 0, z ≥ 0}
+    /// Variable order is (x, y, z).
+    ExpCone {
+        /// The x expression.
+        x: LinExpr,
+        /// The y expression.
+        y: LinExpr,
+        /// The z expression.
+        z: LinExpr,
+    },
+    /// Power cone: {(x, y, z) : x^α * y^(1-α) ≥ |z|, (x,y) ≥ 0} with α ∈ (0,1)
+    /// Variable order is (x, y, z).
+    PowerCone {
+        /// The x expression.
+        x: LinExpr,
+        /// The y expression.
+        y: LinExpr,
+        /// The z expression.
+        z: LinExpr,
+        /// The power α ∈ (0,1).
+        alpha: f64,
+    },
 }
 
 /// Result of canonicalizing an expression.
@@ -177,6 +199,17 @@ impl CanonContext {
             Expr::QuadForm(x, p) => self.canonicalize_quad_form(x, p, for_objective),
             Expr::SumSquares(x) => self.canonicalize_sum_squares(x, for_objective),
             Expr::QuadOverLin(x, y) => self.canonicalize_quad_over_lin(x, y),
+
+            // Exponential cone atoms
+            Expr::Exp(x) => self.canonicalize_exp(x),
+            Expr::Log(x) => self.canonicalize_log(x),
+            Expr::Entropy(x) => self.canonicalize_entropy(x),
+            // Power cone atoms
+            Expr::Power(x, p) => self.canonicalize_power(x, *p),
+
+            // Additional affine atoms
+            Expr::Cumsum(x, axis) => self.canonicalize_cumsum(x, *axis),
+            Expr::Diag(x) => self.canonicalize_diag(x),
         }
     }
 
@@ -418,17 +451,54 @@ impl CanonContext {
     }
 
     fn canonicalize_hstack(&mut self, exprs: &[Arc<Expr>]) -> CanonExpr {
-        // Similar to vstack but horizontal
+        // Horizontal stacking (column-wise concatenation)
         if exprs.is_empty() {
             return CanonExpr::Linear(LinExpr::zeros(Shape::scalar()));
         }
         let mut result = self.canonicalize_expr(&exprs[0], false).as_linear().clone();
         for e in &exprs[1..] {
             let ce = self.canonicalize_expr(e, false).as_linear().clone();
-            // Simplified: treat as addition for now
-            result = result.add(&ce);
+            result = self.hstack_lin(&result, &ce);
         }
         CanonExpr::Linear(result)
+    }
+
+    fn hstack_lin(&self, a: &LinExpr, b: &LinExpr) -> LinExpr {
+        // Stack constants horizontally
+        let new_const = stack_horizontal(&a.constant, &b.constant);
+        let new_shape = Shape::matrix(new_const.nrows(), new_const.ncols());
+
+        // For coefficients: hstack increases output elements (in column-major order)
+        // So we need to vertically stack the coefficient matrices
+        // a contributes to first a.size() output elements
+        // b contributes to next b.size() output elements
+        let mut new_coeffs = std::collections::HashMap::new();
+        let all_vars: std::collections::HashSet<_> =
+            a.coeffs.keys().chain(b.coeffs.keys()).copied().collect();
+
+        for var_id in all_vars {
+            let ca = a.coeffs.get(&var_id);
+            let cb = b.coeffs.get(&var_id);
+            let stacked = match (ca, cb) {
+                (Some(ma), Some(mb)) => csc_vstack(ma, mb),
+                (Some(ma), None) => {
+                    let zeros = CscMatrix::zeros(b.size(), ma.ncols());
+                    csc_vstack(ma, &zeros)
+                }
+                (None, Some(mb)) => {
+                    let zeros = CscMatrix::zeros(a.size(), mb.ncols());
+                    csc_vstack(&zeros, mb)
+                }
+                (None, None) => continue,
+            };
+            new_coeffs.insert(var_id, stacked);
+        }
+
+        LinExpr {
+            coeffs: new_coeffs,
+            constant: new_const,
+            shape: new_shape,
+        }
     }
 
     fn canonicalize_transpose(&mut self, a: &Expr) -> CanonExpr {
@@ -447,9 +517,37 @@ impl CanonContext {
         let ca = self.canonicalize_expr(a, false).as_linear().clone();
         // Trace: sum of diagonal elements
         let n = ca.shape.rows().min(ca.shape.cols());
-        let trace_val: f64 = (0..n).map(|i| ca.constant[(i, i)]).sum();
-        // For coefficients, would need to extract diagonal (simplified)
-        CanonExpr::Linear(LinExpr::scalar(trace_val))
+        let nrows = ca.shape.rows();
+
+        // Sum diagonal of constant matrix
+        let trace_const: f64 = (0..n).map(|i| ca.constant[(i, i)]).sum();
+
+        // Sum diagonal elements of coefficient matrices
+        // Diagonal position (i, i) in column-major order is at flat index i * nrows + i
+        let mut new_coeffs = std::collections::HashMap::new();
+        for (var_id, coeff) in &ca.coeffs {
+            let coeff_dense = csc_to_dense(coeff);
+            let var_size = coeff_dense.ncols();
+            let mut new_coeff = DMatrix::zeros(1, var_size);
+
+            for j in 0..var_size {
+                let mut sum = 0.0;
+                for i in 0..n {
+                    let diag_idx = i * nrows + i; // column-major flat index for (i, i)
+                    if diag_idx < coeff_dense.nrows() {
+                        sum += coeff_dense[(diag_idx, j)];
+                    }
+                }
+                new_coeff[(0, j)] = sum;
+            }
+            new_coeffs.insert(*var_id, dense_to_csc(&new_coeff));
+        }
+
+        CanonExpr::Linear(LinExpr {
+            coeffs: new_coeffs,
+            constant: DMatrix::from_element(1, 1, trace_const),
+            shape: Shape::scalar(),
+        })
     }
 
     // ========================================================================
@@ -699,6 +797,285 @@ impl CanonContext {
             shape: Shape::vector(size),
         }
     }
+
+    // ========================================================================
+    // Exponential Cone Atoms
+    // ========================================================================
+
+    fn canonicalize_exp(&mut self, x: &Expr) -> CanonExpr {
+        // exp(x): Introduce t, add ExpCone(x, 1, t) meaning t >= exp(x)
+        // Each element requires its own exponential cone constraint
+        let cx = self.canonicalize_expr(x, false).as_linear().clone();
+
+        // Create auxiliary variable t for the result
+        let (t_var_id, t) = self.new_nonneg_aux_var(cx.shape.clone());
+        let _ = t_var_id; // Mark as used
+
+        // Add one exp cone constraint per element
+        let n = cx.size();
+        for i in 0..n {
+            let xi = self.extract_element(&cx, i);
+            let ti = self.extract_element(&t, i);
+            let one_scalar = LinExpr::scalar(1.0);
+
+            // (xi, 1, ti) in K_exp means ti >= exp(xi)
+            self.constraints.push(ConeConstraint::ExpCone {
+                x: xi,
+                y: one_scalar,
+                z: ti
+            });
+        }
+
+        CanonExpr::Linear(t)
+    }
+
+    fn canonicalize_log(&mut self, x: &Expr) -> CanonExpr {
+        // log(x): Introduce t, add ExpCone(t, 1, x) meaning t <= log(x)
+        // Each element requires its own exponential cone constraint
+        let cx = self.canonicalize_expr(x, false).as_linear().clone();
+
+        // Create auxiliary variable t for the result
+        let (t_var_id, t) = self.new_aux_var(cx.shape.clone());
+        let _ = t_var_id; // Mark as used
+
+        // Add one exp cone constraint per element
+        let n = cx.size();
+        for i in 0..n {
+            let xi = self.extract_element(&cx, i);
+            let ti = self.extract_element(&t, i);
+            let one_scalar = LinExpr::scalar(1.0);
+
+            // (ti, 1, xi) in K_exp means 1 * exp(ti/1) <= xi
+            // which simplifies to exp(ti) <= xi, so ti <= log(xi)
+            self.constraints.push(ConeConstraint::ExpCone {
+                x: ti,
+                y: one_scalar,
+                z: xi
+            });
+        }
+
+        CanonExpr::Linear(t)
+    }
+
+    fn canonicalize_entropy(&mut self, x: &Expr) -> CanonExpr {
+        // entropy(x) = -x * log(x)
+        // Using exp cone: (t, x, 1) in K_exp means x * exp(t/x) <= 1
+        // which gives t <= -x * log(x) = entropy(x) (hypograph)
+        let cx = self.canonicalize_expr(x, false).as_linear().clone();
+
+        // Create auxiliary variable t for the result
+        let (_t_var_id, t) = self.new_aux_var(cx.shape.clone());
+
+        // Add one exp cone constraint per element
+        let n = cx.size();
+        for i in 0..n {
+            let xi = self.extract_element(&cx, i);
+            let ti = self.extract_element(&t, i);
+            let one_scalar = LinExpr::scalar(1.0);
+
+            // (ti, xi, 1) in K_exp means xi * exp(ti/xi) <= 1
+            // i.e., exp(ti/xi) <= 1/xi, i.e., ti/xi <= -log(xi)
+            // i.e., ti <= -xi * log(xi) = entropy(xi)
+            self.constraints.push(ConeConstraint::ExpCone {
+                x: ti,
+                y: xi,
+                z: one_scalar,
+            });
+        }
+
+        CanonExpr::Linear(t)
+    }
+
+    // ========================================================================
+    // Power Cone Atoms
+    // ========================================================================
+
+    fn canonicalize_power(&mut self, x: &Expr, p: f64) -> CanonExpr {
+        // x^p using power cones
+        // Each element requires its own power cone constraint
+        let cx = self.canonicalize_expr(x, false).as_linear().clone();
+
+        if (p - 1.0).abs() < 1e-10 {
+            // x^1 = x (affine)
+            return CanonExpr::Linear(cx);
+        }
+
+        if (p - 2.0).abs() < 1e-10 {
+            // x^2 use sum_squares approach (more efficient)
+            return self.canonicalize_sum_squares(&Expr::from(x), false);
+        }
+
+        // Create auxiliary variable t for the result
+        let (t_var_id, t) = self.new_nonneg_aux_var(cx.shape.clone());
+        let _ = t_var_id;
+
+        // Add one power cone constraint per element
+        let n = cx.size();
+        for i in 0..n {
+            let xi = self.extract_element(&cx, i);
+            let ti = self.extract_element(&t, i);
+            let one_scalar = LinExpr::scalar(1.0);
+
+            if p > 0.0 && p < 1.0 {
+                // x^p concave for p in (0,1): (x, 1, t) in K_pow(p) means t <= x^p
+                let alpha = p;
+                self.constraints.push(ConeConstraint::PowerCone {
+                    x: xi,
+                    y: one_scalar,
+                    z: ti,
+                    alpha
+                });
+            } else if p > 1.0 {
+                // x^p convex for p > 1: (t, 1, x) in K_pow(1/p) means t >= x^p
+                let alpha = 1.0 / p;
+                self.constraints.push(ConeConstraint::PowerCone {
+                    x: ti,
+                    y: one_scalar,
+                    z: xi,
+                    alpha
+                });
+            } else if p < 0.0 {
+                // x^p convex for p < 0: t >= x^p = 1/x^(-p)
+                // Equivalently: t * x^(-p) >= 1
+                // Use (t, x, 1) in K_pow(alpha) with alpha = 1/(1-p)
+                // This gives t^alpha * x^(1-alpha) >= 1
+                // where alpha = 1/(1-p), 1-alpha = -p/(1-p)
+                // Raising to power (1-p): t * x^(-p) >= 1 ✓
+                let alpha = 1.0 / (1.0 - p);
+                self.constraints.push(ConeConstraint::PowerCone {
+                    x: ti,
+                    y: xi,
+                    z: one_scalar,
+                    alpha,
+                });
+            }
+        }
+
+        CanonExpr::Linear(t)
+    }
+
+    // ========================================================================
+    // Additional Affine Atoms
+    // ========================================================================
+
+    fn canonicalize_cumsum(&mut self, x: &Expr, _axis: Option<usize>) -> CanonExpr {
+        // Cumulative sum using auxiliary variables and constraints
+        // cumsum([x1, x2, x3]) = [y1, y2, y3] where:
+        //   y1 = x1
+        //   y2 = y1 + x2  =>  y2 - y1 = x2
+        //   y3 = y2 + x3  =>  y3 - y2 = x3
+
+        let cx = self.canonicalize_expr(x, false).as_linear().clone();
+        let n = cx.size();
+
+        // Create auxiliary variables for the cumsum result
+        let (y_var_id, y) = self.new_aux_var(cx.shape.clone());
+        let _ = y_var_id;
+
+        // For each element, add constraint: y[i] - y[i-1] = x[i]
+        // Or for i=0: y[0] = x[0]
+
+        for i in 0..n {
+            if i == 0 {
+                // y[0] = x[0]
+                // Extract element 0 from both x and y
+                let x0 = self.extract_element(&cx, i);
+                let y0 = self.extract_element(&y, i);
+
+                // Add constraint: y0 - x0 = 0
+                let diff = y0.add(&x0.scale(-1.0));
+                self.constraints.push(ConeConstraint::Zero { a: diff });
+            } else {
+                // y[i] - y[i-1] = x[i]
+                let yi = self.extract_element(&y, i);
+                let yi_prev = self.extract_element(&y, i - 1);
+                let xi = self.extract_element(&cx, i);
+
+                // y[i] - y[i-1] - x[i] = 0
+                let diff = yi.add(&yi_prev.scale(-1.0)).add(&xi.scale(-1.0));
+                self.constraints.push(ConeConstraint::Zero { a: diff });
+            }
+        }
+
+        CanonExpr::Linear(y)
+    }
+
+    /// Extract a single element from a linear expression
+    fn extract_element(&self, expr: &LinExpr, idx: usize) -> LinExpr {
+        let mut new_coeffs = std::collections::HashMap::new();
+
+        for (var_id, coeff) in &expr.coeffs {
+            // Create a sparse matrix that selects element idx
+            let coeff_dense = csc_to_dense(coeff);
+            let var_size = coeff_dense.ncols();
+            let mut new_coeff = DMatrix::zeros(1, var_size);
+
+            for j in 0..var_size {
+                new_coeff[(0, j)] = coeff_dense[(idx, j)];
+            }
+
+            new_coeffs.insert(*var_id, dense_to_csc(&new_coeff));
+        }
+
+        // Extract constant element
+        let const_val = if expr.shape.is_vector() {
+            expr.constant[(idx, 0)]
+        } else {
+            // For matrix, compute flat index
+            let row = idx / expr.shape.cols();
+            let col = idx % expr.shape.cols();
+            expr.constant[(row, col)]
+        };
+
+        LinExpr {
+            coeffs: new_coeffs,
+            constant: DMatrix::from_element(1, 1, const_val),
+            shape: Shape::scalar(),
+        }
+    }
+
+    fn canonicalize_diag(&mut self, x: &Expr) -> CanonExpr {
+        // Vector to diagonal matrix (simplified for v1.0)
+        let cx = self.canonicalize_expr(x, false).as_linear().clone();
+
+        if cx.shape.is_vector() {
+            // Vector -> diagonal matrix: n -> (n, n)
+            let n = cx.shape.size();
+
+            // Build selection matrix that places vector on diagonal
+            let mut new_coeffs = std::collections::HashMap::new();
+            for (var_id, coeff) in &cx.coeffs {
+                let coeff_dense = csc_to_dense(coeff);
+                let var_size = coeff_dense.ncols();
+                let mut new_coeff = DMatrix::zeros(n * n, var_size);
+
+                for j in 0..var_size {
+                    for i in 0..n {
+                        // Place element i of input vector at diagonal position (i,i) in output
+                        let diag_idx = i * n + i;
+                        new_coeff[(diag_idx, j)] = coeff_dense[(i, j)];
+                    }
+                }
+                new_coeffs.insert(*var_id, dense_to_csc(&new_coeff));
+            }
+
+            // Apply to constant
+            let mut new_const = DMatrix::zeros(n, n);
+            for i in 0..n {
+                new_const[(i, i)] = cx.constant[(i, 0)];
+            }
+
+            CanonExpr::Linear(LinExpr {
+                coeffs: new_coeffs,
+                constant: new_const,
+                shape: Shape::matrix(n, n),
+            })
+        } else {
+            // Matrix -> diagonal vector (not implemented in v1.0)
+            // For now, just return the input as a fallback
+            CanonExpr::Linear(cx)
+        }
+    }
 }
 
 // ============================================================================
@@ -721,6 +1098,17 @@ fn stack_vertical(a: &DMatrix<f64>, b: &DMatrix<f64>) -> DMatrix<f64> {
         .copy_from(a);
     result
         .view_mut((a.nrows(), 0), (b.nrows(), b.ncols()))
+        .copy_from(b);
+    result
+}
+
+fn stack_horizontal(a: &DMatrix<f64>, b: &DMatrix<f64>) -> DMatrix<f64> {
+    let mut result = DMatrix::zeros(a.nrows().max(b.nrows()), a.ncols() + b.ncols());
+    result
+        .view_mut((0, 0), (a.nrows(), a.ncols()))
+        .copy_from(a);
+    result
+        .view_mut((0, a.ncols()), (b.nrows(), b.ncols()))
         .copy_from(b);
     result
 }

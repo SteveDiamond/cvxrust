@@ -10,11 +10,12 @@ pub mod nonlinear;
 
 // Re-export affine operations
 pub use affine::{
-    dot, flatten, hstack, index, matmul, reshape, slice, sum, sum_axis, trace, transpose, vstack,
+    cumsum, diag, dot, flatten, hstack, index, matmul, reshape, slice, sum, sum_axis, trace,
+    transpose, vstack,
 };
 
 // Re-export nonlinear atoms
 pub use nonlinear::{
-    abs, max2, maximum, min2, minimum, neg_part, norm, norm1, norm2, norm_inf, pos, quad_form,
-    quad_over_lin, sum_squares,
+    abs, entropy, exp, log, max2, maximum, min2, minimum, neg_part, norm, norm1, norm2, norm_inf,
+    pos, power, quad_form, quad_over_lin, sqrt, sum_squares,
 };

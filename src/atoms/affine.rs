@@ -252,6 +252,21 @@ pub fn slice(expr: &Expr, start: usize, stop: usize) -> Expr {
     Expr::Index(Arc::new(expr.clone()), IndexSpec::range(start, stop))
 }
 
+/// Cumulative sum along an axis.
+///
+/// Returns cumsum([x1, x2, x3]) = [x1, x1+x2, x1+x2+x3]
+pub fn cumsum(expr: &Expr) -> Expr {
+    Expr::Cumsum(Arc::new(expr.clone()), None)
+}
+
+/// Diagonal matrix from vector, or diagonal of matrix.
+///
+/// - Vector input: Creates diagonal matrix with vector on diagonal
+/// - Matrix input: Extracts diagonal as vector (v1.0: returns input as fallback)
+pub fn diag(expr: &Expr) -> Expr {
+    Expr::Diag(Arc::new(expr.clone()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

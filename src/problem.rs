@@ -140,7 +140,13 @@ impl Problem {
             | Expr::Abs(a)
             | Expr::Pos(a)
             | Expr::NegPart(a)
-            | Expr::SumSquares(a) => {
+            | Expr::SumSquares(a)
+            | Expr::Exp(a)
+            | Expr::Log(a)
+            | Expr::Entropy(a)
+            | Expr::Power(a, _)
+            | Expr::Cumsum(a, _)
+            | Expr::Diag(a) => {
                 Self::collect_variable_shapes(a, shapes);
             }
             Expr::VStack(exprs) | Expr::HStack(exprs) | Expr::Maximum(exprs) | Expr::Minimum(exprs) => {

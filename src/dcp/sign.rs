@@ -170,6 +170,45 @@ impl Expr {
             }
             Expr::SumSquares(_) => Sign::Nonnegative,
             Expr::QuadOverLin(_, _) => Sign::Nonnegative,
+
+            // Exponential cone atoms
+            Expr::Exp(_) => Sign::Nonnegative, // exp(x) > 0 always
+            Expr::Log(_x) => {
+                // log(x) can be positive or negative depending on whether x > 1 or x < 1
+                // Conservative: Unknown
+                // Could check if x is a constant > 1 or < 1
+                Sign::Unknown
+            }
+            Expr::Entropy(_) => {
+                // -x*log(x) for x in [0,1] is nonneg, for x > 1 could be neg
+                // Conservative: Unknown
+                Sign::Unknown
+            }
+            Expr::Power(x, p) => {
+                // x^p sign depends on p and x
+                if *p > 0.0 {
+                    // x^p for p > 0 is nonneg when x is nonneg
+                    if x.sign().is_nonneg() {
+                        Sign::Nonnegative
+                    } else {
+                        Sign::Unknown
+                    }
+                } else if *p < 0.0 {
+                    // x^p for p < 0 is nonneg when x is nonneg (and x > 0)
+                    if x.sign().is_nonneg() {
+                        Sign::Nonnegative
+                    } else {
+                        Sign::Unknown
+                    }
+                } else {
+                    // p = 0 means x^0 = 1
+                    Sign::Nonnegative
+                }
+            }
+
+            // Additional affine atoms
+            Expr::Cumsum(x, _) => x.sign(), // Cumsum preserves sign
+            Expr::Diag(x) => x.sign(), // Diag preserves sign
         }
     }
 

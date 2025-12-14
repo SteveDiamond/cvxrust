@@ -124,6 +124,32 @@ pub fn sparse_dense_matmul(a: &CscMatrix<f64>, b: &DMatrix<f64>) -> CscMatrix<f6
     dense_to_csc(&result)
 }
 
+/// Stack two CSC matrices horizontally.
+pub fn csc_hstack(a: &CscMatrix<f64>, b: &CscMatrix<f64>) -> CscMatrix<f64> {
+    let mut rows = Vec::new();
+    let mut cols = Vec::new();
+    let mut vals = Vec::new();
+
+    for (r, c, v) in a.triplet_iter() {
+        rows.push(r);
+        cols.push(c);
+        vals.push(*v);
+    }
+    for (r, c, v) in b.triplet_iter() {
+        rows.push(r);
+        cols.push(c + a.ncols());
+        vals.push(*v);
+    }
+
+    csc_from_triplets(
+        a.nrows().max(b.nrows()),
+        a.ncols() + b.ncols(),
+        rows,
+        cols,
+        vals,
+    )
+}
+
 /// Repeat rows of a CSC matrix.
 pub fn csc_repeat_rows(m: &CscMatrix<f64>, times: usize) -> CscMatrix<f64> {
     let mut rows = Vec::new();

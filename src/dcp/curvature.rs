@@ -236,6 +236,69 @@ impl Expr {
                     Curvature::Unknown
                 }
             }
+
+            // Exponential cone atoms
+            Expr::Exp(x) => {
+                // exp(x) is convex when x is affine
+                if x.curvature().is_affine() {
+                    Curvature::Convex
+                } else {
+                    Curvature::Unknown
+                }
+            }
+            Expr::Log(x) => {
+                // log(x) is concave when x is concave (and positive)
+                if x.curvature().is_concave() {
+                    Curvature::Concave
+                } else {
+                    Curvature::Unknown
+                }
+            }
+            Expr::Entropy(x) => {
+                // -x*log(x) is concave when x is affine (and positive)
+                if x.curvature().is_affine() {
+                    Curvature::Concave
+                } else {
+                    Curvature::Unknown
+                }
+            }
+            Expr::Power(x, p) => {
+                // x^p curvature depends on p and sign of x
+                if *p == 1.0 {
+                    // x^1 = x is affine
+                    x.curvature()
+                } else if *p == 2.0 {
+                    // x^2 is convex when x is affine (same as sum_squares)
+                    if x.curvature().is_affine() {
+                        Curvature::Convex
+                    } else {
+                        Curvature::Unknown
+                    }
+                } else if *p > 1.0 || *p < 0.0 {
+                    // x^p is convex for p > 1 or p < 0 when x is concave and nonneg
+                    // For DCP we require x to be affine for simplicity
+                    if x.curvature().is_affine() {
+                        Curvature::Convex
+                    } else {
+                        Curvature::Unknown
+                    }
+                } else if *p > 0.0 && *p < 1.0 {
+                    // x^p is concave for 0 < p < 1 when x is convex and nonneg
+                    // For DCP we require x to be affine
+                    if x.curvature().is_affine() {
+                        Curvature::Concave
+                    } else {
+                        Curvature::Unknown
+                    }
+                } else {
+                    // p = 0 or other edge cases
+                    Curvature::Unknown
+                }
+            }
+
+            // Additional affine atoms
+            Expr::Cumsum(x, _) => x.curvature(), // Affine operation
+            Expr::Diag(x) => x.curvature(), // Affine operation
         }
     }
 

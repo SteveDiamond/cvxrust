@@ -20,12 +20,16 @@ pub struct ConeDims {
     pub nonneg: usize,
     /// Second-order cone dimensions (each entry is the cone dimension).
     pub soc: Vec<usize>,
+    /// Number of exponential cones (each is 3D).
+    pub exp: usize,
+    /// Power cone alpha values (each cone is 3D with its own alpha).
+    pub power: Vec<f64>,
 }
 
 impl ConeDims {
     /// Total number of constraint rows.
     pub fn total(&self) -> usize {
-        self.zero + self.nonneg + self.soc.iter().sum::<usize>()
+        self.zero + self.nonneg + self.soc.iter().sum::<usize>() + (self.exp * 3) + (self.power.len() * 3)
     }
 }
 
@@ -171,12 +175,16 @@ fn stuff_constraints(
     let mut zeros: Vec<&LinExpr> = Vec::new();
     let mut nonnegs: Vec<&LinExpr> = Vec::new();
     let mut socs: Vec<(&LinExpr, &LinExpr)> = Vec::new(); // (t, x)
+    let mut exps: Vec<(&LinExpr, &LinExpr, &LinExpr)> = Vec::new(); // (x, y, z)
+    let mut powers: Vec<(&LinExpr, &LinExpr, &LinExpr, f64)> = Vec::new(); // (x, y, z, alpha)
 
     for c in constraints {
         match c {
             ConeConstraint::Zero { a } => zeros.push(a),
             ConeConstraint::NonNeg { a } => nonnegs.push(a),
             ConeConstraint::SOC { t, x } => socs.push((t, x)),
+            ConeConstraint::ExpCone { x, y, z } => exps.push((x, y, z)),
+            ConeConstraint::PowerCone { x, y, z, alpha } => powers.push((x, y, z, *alpha)),
         }
     }
 
@@ -185,13 +193,18 @@ fn stuff_constraints(
     let nonneg_rows: usize = nonnegs.iter().map(|e| e.size()).sum();
     let soc_dims: Vec<usize> = socs.iter().map(|(t, x)| t.size() + x.size()).collect();
     let soc_rows: usize = soc_dims.iter().sum();
+    let exp_rows = exps.len() * 3; // Each exp cone is 3D (x, y, z)
+    let power_alphas: Vec<f64> = powers.iter().map(|(_, _, _, alpha)| *alpha).collect();
+    let power_rows = powers.len() * 3; // Each power cone is 3D (x, y, z)
 
-    let total_rows = zero_rows + nonneg_rows + soc_rows;
+    let total_rows = zero_rows + nonneg_rows + soc_rows + exp_rows + power_rows;
 
     let cone_dims = ConeDims {
         zero: zero_rows,
         nonneg: nonneg_rows,
         soc: soc_dims,
+        exp: exps.len(),
+        power: power_alphas,
     };
 
     // Build A and b
@@ -265,6 +278,96 @@ fn stuff_constraints(
             true, // Negate for SOC
         );
         row_offset += x_expr.size();
+    }
+
+    // Exponential cone: (x, y, z) in K_exp
+    // Clarabel form: s in K_exp means y*exp(x/y) <= z with y >= 0
+    // Variable order: [x; y; z]
+    // Negate to get s = [x_expr; y_expr; z_expr]
+    for (x_expr, y_expr, z_expr) in exps {
+        // x part
+        stuff_linear_expr(
+            x_expr,
+            var_map,
+            row_offset,
+            &mut a_rows,
+            &mut a_cols,
+            &mut a_vals,
+            &mut b,
+            true, // Negate for exp cone
+        );
+        row_offset += x_expr.size();
+
+        // y part
+        stuff_linear_expr(
+            y_expr,
+            var_map,
+            row_offset,
+            &mut a_rows,
+            &mut a_cols,
+            &mut a_vals,
+            &mut b,
+            true, // Negate for exp cone
+        );
+        row_offset += y_expr.size();
+
+        // z part
+        stuff_linear_expr(
+            z_expr,
+            var_map,
+            row_offset,
+            &mut a_rows,
+            &mut a_cols,
+            &mut a_vals,
+            &mut b,
+            true, // Negate for exp cone
+        );
+        row_offset += z_expr.size();
+    }
+
+    // Power cone: (x, y, z) in K_pow(alpha)
+    // Clarabel form: s in K_pow(alpha) means x^alpha * y^(1-alpha) >= |z| with x, y >= 0
+    // Variable order: [x; y; z]
+    // Negate to get s = [x_expr; y_expr; z_expr]
+    for (x_expr, y_expr, z_expr, _alpha) in powers {
+        // x part
+        stuff_linear_expr(
+            x_expr,
+            var_map,
+            row_offset,
+            &mut a_rows,
+            &mut a_cols,
+            &mut a_vals,
+            &mut b,
+            true, // Negate for power cone
+        );
+        row_offset += x_expr.size();
+
+        // y part
+        stuff_linear_expr(
+            y_expr,
+            var_map,
+            row_offset,
+            &mut a_rows,
+            &mut a_cols,
+            &mut a_vals,
+            &mut b,
+            true, // Negate for power cone
+        );
+        row_offset += y_expr.size();
+
+        // z part
+        stuff_linear_expr(
+            z_expr,
+            var_map,
+            row_offset,
+            &mut a_rows,
+            &mut a_cols,
+            &mut a_vals,
+            &mut b,
+            true, // Negate for power cone
+        );
+        row_offset += z_expr.size();
     }
 
     let a = csc_from_triplets(total_rows, n, a_rows, a_cols, a_vals);
@@ -349,7 +452,22 @@ mod tests {
             zero: 2,
             nonneg: 3,
             soc: vec![4, 5],
+            exp: 0,
+            power: vec![],
         };
         assert_eq!(dims.total(), 14);
+    }
+
+    #[test]
+    fn test_cone_dims_with_exp_power() {
+        let dims = ConeDims {
+            zero: 2,
+            nonneg: 3,
+            soc: vec![4, 5],
+            exp: 2,          // 2 exp cones = 6 rows
+            power: vec![0.5, 0.7],  // 2 power cones = 6 rows
+        };
+        // 2 + 3 + 4 + 5 + 6 + 6 = 26
+        assert_eq!(dims.total(), 26);
     }
 }

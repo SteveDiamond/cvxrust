@@ -84,9 +84,9 @@ pub mod prelude {
 
     // Atoms
     pub use crate::atoms::{
-        abs, dot, flatten, hstack, matmul, max2, maximum, min2, minimum, neg_part, norm, norm1,
-        norm2, norm_inf, pos, quad_form, quad_over_lin, reshape, sum, sum_axis, sum_squares, trace,
-        transpose, vstack,
+        abs, cumsum, diag, dot, entropy, exp, flatten, hstack, log, matmul, max2, maximum, min2,
+        minimum, neg_part, norm, norm1, norm2, norm_inf, pos, power, quad_form, quad_over_lin,
+        reshape, sqrt, sum, sum_axis, sum_squares, trace, transpose, vstack,
     };
 
     // Constraints
