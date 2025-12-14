@@ -129,9 +129,7 @@ impl Shape {
         // Handle various cases
         match (self.ndim(), other.ndim()) {
             // matrix @ matrix
-            (2, 2) if self.cols() == other.rows() => {
-                Some(Shape::matrix(self.rows(), other.cols()))
-            }
+            (2, 2) if self.cols() == other.rows() => Some(Shape::matrix(self.rows(), other.cols())),
             // matrix @ vector
             (2, 1) if self.cols() == other.rows() => Some(Shape::vector(self.rows())),
             // vector @ matrix (treated as row vector)

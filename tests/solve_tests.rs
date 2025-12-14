@@ -70,7 +70,6 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 (prob, 8.0)
             },
         },
-
         // ========== Norms (SOCP) ==========
         TestCase {
             name: "norm2_equality",
@@ -121,7 +120,6 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 (prob, 1.0)
             },
         },
-
         // ========== Quadratic (QP) ==========
         TestCase {
             name: "sum_squares_equality",
@@ -147,7 +145,6 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 (prob, 3.0)
             },
         },
-
         // ========== Element-wise convex ==========
         TestCase {
             name: "abs_equality",
@@ -170,15 +167,11 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 // optimal is x = [0.5, 0.5], pos = [0.5, 0.5], value = 1
                 let x = variable(2);
                 let prob = Problem::minimize(sum(&pos(&x)))
-                    .subject_to([
-                        x.ge(constant(-2.0)),
-                        sum(&x).eq(constant(1.0)),
-                    ])
+                    .subject_to([x.ge(constant(-2.0)), sum(&x).eq(constant(1.0))])
                     .build();
                 (prob, 1.0)
             },
         },
-
         // ========== Maximum/Minimum ==========
         TestCase {
             name: "maximum_bound",
@@ -193,7 +186,6 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 (prob, 2.0)
             },
         },
-
         // ========== Multiple constraints ==========
         TestCase {
             name: "box_constraints",
@@ -214,10 +206,7 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 // optimal: x = [1,1,1], value = sqrt(3)
                 let x = variable(3);
                 let prob = Problem::minimize(norm2(&x))
-                    .subject_to([
-                        x.ge(constant(0.0)),
-                        sum(&x).eq(constant(3.0)),
-                    ])
+                    .subject_to([x.ge(constant(0.0)), sum(&x).eq(constant(3.0))])
                     .build();
                 (prob, 3.0_f64.sqrt())
             },
@@ -272,52 +261,40 @@ fn maximize_test_cases() -> Vec<TestCase> {
 /// Test cases expected to be infeasible
 fn infeasible_test_cases() -> Vec<(&'static str, Problem)> {
     vec![
-        (
-            "infeasible_bounds",
-            {
-                // x >= 1 and x <= 0 is infeasible
-                let x = variable(3);
-                Problem::minimize(sum(&x))
-                    .subject_to([x.ge(constant(1.0)), x.le(constant(0.0))])
-                    .build()
-            },
-        ),
-        (
-            "infeasible_equality",
-            {
-                // x == 1 and x == 2 is infeasible
-                let x = variable(1);
-                Problem::minimize(sum(&x))
-                    .subject_to([x.eq(constant(1.0)), x.eq(constant(2.0))])
-                    .build()
-            },
-        ),
+        ("infeasible_bounds", {
+            // x >= 1 and x <= 0 is infeasible
+            let x = variable(3);
+            Problem::minimize(sum(&x))
+                .subject_to([x.ge(constant(1.0)), x.le(constant(0.0))])
+                .build()
+        }),
+        ("infeasible_equality", {
+            // x == 1 and x == 2 is infeasible
+            let x = variable(1);
+            Problem::minimize(sum(&x))
+                .subject_to([x.eq(constant(1.0)), x.eq(constant(2.0))])
+                .build()
+        }),
     ]
 }
 
 /// Test cases expected to be unbounded
 fn unbounded_test_cases() -> Vec<(&'static str, Problem)> {
     vec![
-        (
-            "unbounded_below",
-            {
-                // minimize sum(x) with only upper bound
-                let x = variable(3);
-                Problem::minimize(sum(&x))
-                    .subject_to([x.le(constant(1.0))])
-                    .build()
-            },
-        ),
-        (
-            "unbounded_above",
-            {
-                // maximize sum(x) with only lower bound
-                let x = variable(3);
-                Problem::maximize(sum(&x))
-                    .subject_to([x.ge(constant(1.0))])
-                    .build()
-            },
-        ),
+        ("unbounded_below", {
+            // minimize sum(x) with only upper bound
+            let x = variable(3);
+            Problem::minimize(sum(&x))
+                .subject_to([x.le(constant(1.0))])
+                .build()
+        }),
+        ("unbounded_above", {
+            // maximize sum(x) with only lower bound
+            let x = variable(3);
+            Problem::maximize(sum(&x))
+                .subject_to([x.ge(constant(1.0))])
+                .build()
+        }),
     ]
 }
 
@@ -333,12 +310,20 @@ fn test_minimize_atoms() {
         assert!(prob.is_dcp(), "Problem '{}' should be DCP", case.name);
 
         let result = prob.solve();
-        assert!(result.is_ok(), "Problem '{}' should solve: {:?}", case.name, result.err());
+        assert!(
+            result.is_ok(),
+            "Problem '{}' should solve: {:?}",
+            case.name,
+            result.err()
+        );
 
         let solution = result.unwrap();
         assert_eq!(
-            solution.status, SolveStatus::Optimal,
-            "Problem '{}' should be optimal, got {:?}", case.name, solution.status
+            solution.status,
+            SolveStatus::Optimal,
+            "Problem '{}' should be optimal, got {:?}",
+            case.name,
+            solution.status
         );
 
         let value = solution.value.expect("should have value");
@@ -346,7 +331,10 @@ fn test_minimize_atoms() {
         assert!(
             rel_err < TOL,
             "Problem '{}': expected {}, got {} (rel_err={})",
-            case.name, expected, value, rel_err
+            case.name,
+            expected,
+            value,
+            rel_err
         );
     }
 }
@@ -359,12 +347,20 @@ fn test_maximize_atoms() {
         assert!(prob.is_dcp(), "Problem '{}' should be DCP", case.name);
 
         let result = prob.solve();
-        assert!(result.is_ok(), "Problem '{}' should solve: {:?}", case.name, result.err());
+        assert!(
+            result.is_ok(),
+            "Problem '{}' should solve: {:?}",
+            case.name,
+            result.err()
+        );
 
         let solution = result.unwrap();
         assert_eq!(
-            solution.status, SolveStatus::Optimal,
-            "Problem '{}' should be optimal, got {:?}", case.name, solution.status
+            solution.status,
+            SolveStatus::Optimal,
+            "Problem '{}' should be optimal, got {:?}",
+            case.name,
+            solution.status
         );
 
         let value = solution.value.expect("should have value");
@@ -372,7 +368,10 @@ fn test_maximize_atoms() {
         assert!(
             rel_err < TOL,
             "Problem '{}': expected {}, got {} (rel_err={})",
-            case.name, expected, value, rel_err
+            case.name,
+            expected,
+            value,
+            rel_err
         );
     }
 }
@@ -448,7 +447,7 @@ fn test_bug_sparse_constant_becomes_zero() {
     assert_eq!(solution.status, SolveStatus::Optimal);
 
     let value = solution.value.expect("Should have value");
-    let expected = 6.0;  // sum([1, 2, 3])
+    let expected = 6.0; // sum([1, 2, 3])
     let rel_err = (value - expected).abs() / (1.0 + expected.abs());
 
     // This test will FAIL until the bug is fixed
@@ -456,7 +455,9 @@ fn test_bug_sparse_constant_becomes_zero() {
     assert!(
         rel_err < TOL,
         "BUG: Sparse constant became zeros! Expected {}, got {} (rel_err={})",
-        expected, value, rel_err
+        expected,
+        value,
+        rel_err
     );
 }
 
@@ -488,7 +489,7 @@ fn test_bug_right_matmul_broken() {
     assert_eq!(solution.status, SolveStatus::Optimal);
 
     let value = solution.value.expect("Should have value");
-    let expected = 5.0;  // 2 + 3
+    let expected = 5.0; // 2 + 3
     let rel_err = (value - expected).abs() / (1.0 + expected.abs());
 
     // This test will FAIL until the bug is fixed
@@ -496,7 +497,9 @@ fn test_bug_right_matmul_broken() {
     assert!(
         rel_err < TOL,
         "BUG: Right matmul x @ A didn't multiply! Expected {}, got {} (rel_err={})",
-        expected, value, rel_err
+        expected,
+        value,
+        rel_err
     );
 }
 
@@ -531,7 +534,7 @@ fn test_bug_left_matmul_sparse_broken() {
     assert_eq!(solution.status, SolveStatus::Optimal);
 
     let value = solution.value.expect("Should have value");
-    let expected = 5.0;  // 2 + 3
+    let expected = 5.0; // 2 + 3
     let rel_err = (value - expected).abs() / (1.0 + expected.abs());
 
     // This test will FAIL until the bug is fixed
@@ -539,7 +542,9 @@ fn test_bug_left_matmul_sparse_broken() {
     assert!(
         rel_err < TOL,
         "BUG: Left matmul with sparse A @ x didn't multiply! Expected {}, got {} (rel_err={})",
-        expected, value, rel_err
+        expected,
+        value,
+        rel_err
     );
 }
 
@@ -570,7 +575,9 @@ fn test_primal_values() {
                     assert!(
                         (m[(i, j)] - 2.0).abs() < TOL,
                         "x[{},{}] should be ~2.0, got {}",
-                        i, j, m[(i, j)]
+                        i,
+                        j,
+                        m[(i, j)]
                     );
                 }
             }
@@ -599,7 +606,11 @@ fn test_neg_part() {
     assert_eq!(solution.status, SolveStatus::Optimal);
 
     let value = solution.value.expect("should have value");
-    assert!(value.abs() < TOL, "neg_part optimal should be 0, got {}", value);
+    assert!(
+        value.abs() < TOL,
+        "neg_part optimal should be 0, got {}",
+        value
+    );
 }
 
 /// Test quad_form: x'Px with PSD P
@@ -623,14 +634,23 @@ fn test_quad_form_psd() {
         .subject_to([sum(&x).eq(constant(1.0))])
         .build();
 
-    assert!(prob.is_dcp(), "quad_form(x, PSD) should be DCP for minimize");
+    assert!(
+        prob.is_dcp(),
+        "quad_form(x, PSD) should be DCP for minimize"
+    );
     let solution = prob.solve().expect("should solve");
     assert_eq!(solution.status, SolveStatus::Optimal);
 
     let value = solution.value.expect("should have value");
     let expected = 1.2;
     let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-    assert!(rel_err < TOL, "quad_form expected {}, got {} (rel_err={})", expected, value, rel_err);
+    assert!(
+        rel_err < TOL,
+        "quad_form expected {}, got {} (rel_err={})",
+        expected,
+        value,
+        rel_err
+    );
 }
 
 /// Test hstack: horizontal concatenation
@@ -653,7 +673,13 @@ fn test_hstack() {
     let value = solution.value.expect("should have value");
     let expected = 3.0 * 1.0 + 3.0 * 2.0; // 9.0
     let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-    assert!(rel_err < TOL, "hstack expected {}, got {} (rel_err={})", expected, value, rel_err);
+    assert!(
+        rel_err < TOL,
+        "hstack expected {}, got {} (rel_err={})",
+        expected,
+        value,
+        rel_err
+    );
 }
 
 /// Test weighted sum (equivalent to dot product)
@@ -680,14 +706,20 @@ fn test_weighted_sum() {
     let value = solution.value.expect("should have value");
     let expected = 6.0;
     let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-    assert!(rel_err < TOL, "weighted sum expected {}, got {} (rel_err={})", expected, value, rel_err);
+    assert!(
+        rel_err < TOL,
+        "weighted sum expected {}, got {} (rel_err={})",
+        expected,
+        value,
+        rel_err
+    );
 }
 
 /// Test transpose in optimization
 #[test]
 fn test_transpose_in_constraint() {
     let x = variable((2, 3)); // 2x3 matrix
-    let _xt = transpose(&x);   // 3x2 matrix
+    let _xt = transpose(&x); // 3x2 matrix
 
     // minimize sum(x) s.t. x >= 1
     let prob = Problem::minimize(sum(&x))
@@ -765,7 +797,11 @@ fn test_single_element() {
 
     let solution = prob.solve().expect("should solve");
     let value = solution.value.expect("should have value");
-    assert!((value - 5.0).abs() < TOL, "single element: expected 5, got {}", value);
+    assert!(
+        (value - 5.0).abs() < TOL,
+        "single element: expected 5, got {}",
+        value
+    );
 }
 
 /// Test with constant objective (no variables in objective)
@@ -779,7 +815,11 @@ fn test_constant_objective() {
 
     let solution = prob.solve().expect("should solve");
     let value = solution.value.expect("should have value");
-    assert!((value - 1.0).abs() < TOL, "constant obj: expected 1, got {}", value);
+    assert!(
+        (value - 1.0).abs() < TOL,
+        "constant obj: expected 1, got {}",
+        value
+    );
 }
 
 /// Test tight constraint
@@ -797,7 +837,11 @@ fn test_tight_constraints() {
 
     let solution = prob.solve().expect("should solve");
     let value = solution.value.expect("should have value");
-    assert!((value - 3.0).abs() < TOL, "tight constraints: expected 3, got {}", value);
+    assert!(
+        (value - 3.0).abs() < TOL,
+        "tight constraints: expected 3, got {}",
+        value
+    );
 }
 
 // ============================================================================
@@ -818,7 +862,12 @@ fn test_scale_100_variables_lp() {
 
     let value = solution.value.expect("should have value");
     let expected = 100.0;
-    assert!((value - expected).abs() < TOL * 100.0, "100-var LP: expected {}, got {}", expected, value);
+    assert!(
+        (value - expected).abs() < TOL * 100.0,
+        "100-var LP: expected {}, got {}",
+        expected,
+        value
+    );
 }
 
 /// Test with 50 variables (SOCP)
@@ -837,7 +886,13 @@ fn test_scale_50_variables_socp() {
     let value = solution.value.expect("should have value");
     let expected = (50.0_f64).sqrt();
     let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-    assert!(rel_err < TOL, "50-var SOCP: expected {}, got {} (rel_err={})", expected, value, rel_err);
+    assert!(
+        rel_err < TOL,
+        "50-var SOCP: expected {}, got {} (rel_err={})",
+        expected,
+        value,
+        rel_err
+    );
 }
 
 /// Test with 30 variables (QP)
@@ -856,7 +911,13 @@ fn test_scale_30_variables_qp() {
     let value = solution.value.expect("should have value");
     let expected = 30.0;
     let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-    assert!(rel_err < TOL, "30-var QP: expected {}, got {} (rel_err={})", expected, value, rel_err);
+    assert!(
+        rel_err < TOL,
+        "30-var QP: expected {}, got {} (rel_err={})",
+        expected,
+        value,
+        rel_err
+    );
 }
 
 // ============================================================================
@@ -867,7 +928,7 @@ mod stress_tests {
     use super::*;
     use nalgebra::DMatrix;
 
-    const STRESS_TOL: f64 = 1e-3;  // Slightly looser tolerance for complex problems
+    const STRESS_TOL: f64 = 1e-3; // Slightly looser tolerance for complex problems
 
     // ========================================================================
     // quad_form stress tests
@@ -900,19 +961,20 @@ mod stress_tests {
         let value = solution.value.expect("should have value");
         let expected = 1.5;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "non-diagonal quad_form: expected {}, got {} (rel_err={})",
-                expected, value, rel_err);
+        assert!(
+            rel_err < STRESS_TOL,
+            "non-diagonal quad_form: expected {}, got {} (rel_err={})",
+            expected,
+            value,
+            rel_err
+        );
     }
 
     /// quad_form with 3x3 matrix
     #[test]
     fn test_quad_form_3x3() {
         // P = diag(1, 2, 3)
-        let p_mat = DMatrix::from_vec(3, 3, vec![
-            1.0, 0.0, 0.0,
-            0.0, 2.0, 0.0,
-            0.0, 0.0, 3.0,
-        ]);
+        let p_mat = DMatrix::from_vec(3, 3, vec![1.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 3.0]);
         let p = constant_dmatrix(p_mat);
         let x = variable(3);
 
@@ -931,8 +993,13 @@ mod stress_tests {
         let value = solution.value.expect("should have value");
         let expected = 6.0 / 11.0;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "3x3 quad_form: expected {}, got {} (rel_err={})",
-                expected, value, rel_err);
+        assert!(
+            rel_err < STRESS_TOL,
+            "3x3 quad_form: expected {}, got {} (rel_err={})",
+            expected,
+            value,
+            rel_err
+        );
     }
 
     // ========================================================================
@@ -974,20 +1041,29 @@ mod stress_tests {
         let value = solution.value.expect("should have value");
         let expected = 2.0;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "nested matmul: expected {}, got {} (rel_err={})",
-                expected, value, rel_err);
+        assert!(
+            rel_err < STRESS_TOL,
+            "nested matmul: expected {}, got {} (rel_err={})",
+            expected,
+            value,
+            rel_err
+        );
     }
 
     /// Matmul with non-square matrix
     #[test]
     fn test_matmul_nonsquare() {
         // A is 2x4, x is 4x1, result is 2x1
-        let a_mat = DMatrix::from_vec(2, 4, vec![
-            1.0, 2.0,  // col 0
-            3.0, 4.0,  // col 1
-            5.0, 6.0,  // col 2
-            7.0, 8.0,  // col 3
-        ]);
+        let a_mat = DMatrix::from_vec(
+            2,
+            4,
+            vec![
+                1.0, 2.0, // col 0
+                3.0, 4.0, // col 1
+                5.0, 6.0, // col 2
+                7.0, 8.0, // col 3
+            ],
+        );
         let a = constant_dmatrix(a_mat);
         let x = variable(4);
 
@@ -1004,20 +1080,29 @@ mod stress_tests {
         let value = solution.value.expect("should have value");
         let expected = 3.0;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "nonsquare matmul: expected {}, got {} (rel_err={})",
-                expected, value, rel_err);
+        assert!(
+            rel_err < STRESS_TOL,
+            "nonsquare matmul: expected {}, got {} (rel_err={})",
+            expected,
+            value,
+            rel_err
+        );
     }
 
     /// Right matmul: x @ A (row vector times matrix)
     #[test]
     fn test_right_matmul_row_vector() {
         // x is 1x3 row vector, A is 3x2, result is 1x2
-        let a_mat = DMatrix::from_vec(3, 2, vec![
-            1.0, 2.0, 3.0,  // col 0
-            4.0, 5.0, 6.0,  // col 1
-        ]);
+        let a_mat = DMatrix::from_vec(
+            3,
+            2,
+            vec![
+                1.0, 2.0, 3.0, // col 0
+                4.0, 5.0, 6.0, // col 1
+            ],
+        );
         let a = constant_dmatrix(a_mat);
-        let x = variable((1, 3));  // 1x3 row vector
+        let x = variable((1, 3)); // 1x3 row vector
 
         // minimize sum(x @ A) s.t. x >= 1
         // x @ A = [x1 + 2*x2 + 3*x3, 4*x1 + 5*x2 + 6*x3]
@@ -1031,8 +1116,13 @@ mod stress_tests {
         let value = solution.value.expect("should have value");
         let expected = 21.0;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "right matmul: expected {}, got {} (rel_err={})",
-                expected, value, rel_err);
+        assert!(
+            rel_err < STRESS_TOL,
+            "right matmul: expected {}, got {} (rel_err={})",
+            expected,
+            value,
+            rel_err
+        );
     }
 
     // ========================================================================
@@ -1061,8 +1151,13 @@ mod stress_tests {
         // optimal: all = 1, value = 3 + 2*2 + 3*1 = 3 + 4 + 3 = 10
         let expected = 10.0;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "multi-var obj: expected {}, got {} (rel_err={})",
-                expected, value, rel_err);
+        assert!(
+            rel_err < STRESS_TOL,
+            "multi-var obj: expected {}, got {} (rel_err={})",
+            expected,
+            value,
+            rel_err
+        );
     }
 
     /// Shared variable in objective and constraints
@@ -1084,8 +1179,13 @@ mod stress_tests {
         let value = solution.value.expect("should have value");
         let expected = 3.0_f64.sqrt();
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "shared var: expected {}, got {} (rel_err={})",
-                expected, value, rel_err);
+        assert!(
+            rel_err < STRESS_TOL,
+            "shared var: expected {}, got {} (rel_err={})",
+            expected,
+            value,
+            rel_err
+        );
     }
 
     /// Variable appears in multiple constraints with different atoms
@@ -1107,7 +1207,11 @@ mod stress_tests {
         assert_eq!(solution.status, SolveStatus::Optimal);
         let value = solution.value.expect("should have value");
         // Should achieve sum(x) = 1 (the lower bound)
-        assert!((value - 1.0).abs() < STRESS_TOL, "multi-constraint: expected ~1, got {}", value);
+        assert!(
+            (value - 1.0).abs() < STRESS_TOL,
+            "multi-constraint: expected ~1, got {}",
+            value
+        );
     }
 
     // ========================================================================
@@ -1124,10 +1228,7 @@ mod stress_tests {
         // minimize ||vstack([x, y])||_2 s.t. sum(x) = 1, sum(y) = 1
         let stacked = vstack(vec![x.clone(), y.clone()]);
         let prob = Problem::minimize(norm2(&stacked))
-            .subject_to([
-                sum(&x).eq(constant(1.0)),
-                sum(&y).eq(constant(1.0)),
-            ])
+            .subject_to([sum(&x).eq(constant(1.0)), sum(&y).eq(constant(1.0))])
             .build();
 
         let solution = prob.solve().expect("should solve");
@@ -1135,8 +1236,13 @@ mod stress_tests {
         // optimal: x = [0.5, 0.5], y = [0.5, 0.5], norm = sqrt(4 * 0.25) = 1
         let expected = 1.0;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "vstack obj: expected {}, got {} (rel_err={})",
-                expected, value, rel_err);
+        assert!(
+            rel_err < STRESS_TOL,
+            "vstack obj: expected {}, got {} (rel_err={})",
+            expected,
+            value,
+            rel_err
+        );
     }
 
     /// vstack in constraint
@@ -1156,8 +1262,13 @@ mod stress_tests {
         // optimal: all = 1, value = 4
         let expected = 4.0;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "vstack constraint: expected {}, got {} (rel_err={})",
-                expected, value, rel_err);
+        assert!(
+            rel_err < STRESS_TOL,
+            "vstack constraint: expected {}, got {} (rel_err={})",
+            expected,
+            value,
+            rel_err
+        );
     }
 
     // ========================================================================
@@ -1179,8 +1290,13 @@ mod stress_tests {
         let value = solution.value.expect("should have value");
         let expected = 3e-6;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "small coeff: expected {}, got {} (rel_err={})",
-                expected, value, rel_err);
+        assert!(
+            rel_err < STRESS_TOL,
+            "small coeff: expected {}, got {} (rel_err={})",
+            expected,
+            value,
+            rel_err
+        );
     }
 
     /// Large coefficients
@@ -1198,8 +1314,13 @@ mod stress_tests {
         let value = solution.value.expect("should have value");
         let expected = 3e6;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "large coeff: expected {}, got {} (rel_err={})",
-                expected, value, rel_err);
+        assert!(
+            rel_err < STRESS_TOL,
+            "large coeff: expected {}, got {} (rel_err={})",
+            expected,
+            value,
+            rel_err
+        );
     }
 
     /// Near-degenerate constraint (almost parallel)
@@ -1213,9 +1334,7 @@ mod stress_tests {
         let c1 = sum(&x).eq(constant(1.0));
         let c2 = (&x + &constant_vec(vec![0.0, 0.0001])).eq(constant_vec(vec![0.5, 0.5001]));
 
-        let prob = Problem::minimize(sum(&x))
-            .subject_to([c1, c2])
-            .build();
+        let prob = Problem::minimize(sum(&x)).subject_to([c1, c2]).build();
 
         // Should either solve or report numerical issues
         let result = prob.solve();
@@ -1258,8 +1377,13 @@ mod stress_tests {
         // optimal: x = [1, 1, 0.5, 0.5] or similar, value = 3
         let expected = 3.0;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "mixed eq/ineq: expected {}, got {} (rel_err={})",
-                expected, value, rel_err);
+        assert!(
+            rel_err < STRESS_TOL,
+            "mixed eq/ineq: expected {}, got {} (rel_err={})",
+            expected,
+            value,
+            rel_err
+        );
     }
 
     /// Multiple SOCP constraints
@@ -1286,7 +1410,11 @@ mod stress_tests {
         assert_eq!(solution.status, SolveStatus::Optimal);
         let value = solution.value.expect("should have value");
         // Should be around 1.0 (0.5 + 0.5)
-        assert!(value >= 0.99 && value <= 1.5, "multiple SOCP: got {}", value);
+        assert!(
+            value >= 0.99 && value <= 1.5,
+            "multiple SOCP: got {}",
+            value
+        );
     }
 
     // ========================================================================
@@ -1300,7 +1428,7 @@ mod stress_tests {
 
         // Sparse vector [0, 5, 0] - only middle element is non-zero
         let mut coo = CooMatrix::new(3, 1);
-        coo.push(1, 0, 5.0);  // Only x[1] has constraint x[1] >= 5
+        coo.push(1, 0, 5.0); // Only x[1] has constraint x[1] >= 5
         let sparse: CscMatrix<f64> = CscMatrix::from(&coo);
 
         let x = variable(3);
@@ -1313,7 +1441,12 @@ mod stress_tests {
         // x >= [0, 5, 0] means optimal x = [0, 5, 0], sum = 5
         let expected = 5.0;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "sparse const regression: expected {}, got {}", expected, value);
+        assert!(
+            rel_err < STRESS_TOL,
+            "sparse const regression: expected {}, got {}",
+            expected,
+            value
+        );
     }
 
     /// Regression: sparse matrix in matmul (bug #2, #3)
@@ -1342,7 +1475,12 @@ mod stress_tests {
         let value = solution.value.expect("should have value");
         let expected = 9.0;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "sparse matmul regression: expected {}, got {}", expected, value);
+        assert!(
+            rel_err < STRESS_TOL,
+            "sparse matmul regression: expected {}, got {}",
+            expected,
+            value
+        );
     }
 
     // ========================================================================
@@ -1360,7 +1498,11 @@ mod stress_tests {
         let solution = prob.solve().expect("should solve 200-var LP");
         assert_eq!(solution.status, SolveStatus::Optimal);
         let value = solution.value.expect("should have value");
-        assert!((value - 200.0).abs() < 1.0, "200-var LP: expected ~200, got {}", value);
+        assert!(
+            (value - 200.0).abs() < 1.0,
+            "200-var LP: expected ~200, got {}",
+            value
+        );
     }
 
     /// 100 variables with multiple constraint types
@@ -1370,10 +1512,7 @@ mod stress_tests {
 
         // minimize ||x||_2 s.t. sum(x) = 100, x >= 0
         let prob = Problem::minimize(norm2(&x))
-            .subject_to([
-                sum(&x).eq(constant(100.0)),
-                x.ge(constant(0.0)),
-            ])
+            .subject_to([sum(&x).eq(constant(100.0)), x.ge(constant(0.0))])
             .build();
 
         let solution = prob.solve().expect("should solve");
@@ -1382,7 +1521,12 @@ mod stress_tests {
         // optimal: all x[i] = 1, ||x|| = 10
         let expected = 10.0;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "100-var mixed: expected {}, got {}", expected, value);
+        assert!(
+            rel_err < STRESS_TOL,
+            "100-var mixed: expected {}, got {}",
+            expected,
+            value
+        );
     }
 
     /// 50 variables sum_squares (QP)
@@ -1401,7 +1545,12 @@ mod stress_tests {
         // optimal: all x[i] = 1, ||x||^2 = 50
         let expected = 50.0;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "50-var QP: expected {}, got {}", expected, value);
+        assert!(
+            rel_err < STRESS_TOL,
+            "50-var QP: expected {}, got {}",
+            expected,
+            value
+        );
     }
 
     // ========================================================================
@@ -1431,14 +1580,19 @@ mod stress_tests {
         let value = solution.value.expect("should have value");
         let expected = 4.5;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "deep nesting: expected {}, got {}", expected, value);
+        assert!(
+            rel_err < STRESS_TOL,
+            "deep nesting: expected {}, got {}",
+            expected,
+            value
+        );
     }
 
     /// Multiple operations on same expression
     #[test]
     fn test_expression_reuse() {
         let x = variable(3);
-        let y = sum(&x);  // Reuse this expression
+        let y = sum(&x); // Reuse this expression
 
         // minimize y + y (same expression twice) s.t. x >= 1
         // = 2 * sum(x)
@@ -1451,7 +1605,12 @@ mod stress_tests {
         let value = solution.value.expect("should have value");
         let expected = 6.0;
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
-        assert!(rel_err < STRESS_TOL, "expr reuse: expected {}, got {}", expected, value);
+        assert!(
+            rel_err < STRESS_TOL,
+            "expr reuse: expected {}, got {}",
+            expected,
+            value
+        );
     }
 }
 
@@ -1461,20 +1620,24 @@ fn test_variable_product_not_dcp() {
     let x = variable(1);
     let y = variable(1);
     let prod = &x * &y;
-    
+
     // Check curvature is Unknown
     assert_eq!(prod.curvature(), cvxrust::dcp::Curvature::Unknown);
-    
+
     // Problem should be not DCP
     let prob = Problem::minimize(prod).build();
     assert!(!prob.is_dcp());
-    
+
     // Solve should return NotDcp error
     let result = prob.solve();
     assert!(result.is_err());
     if let Err(e) = result {
         let msg = format!("{}", e);
-        assert!(msg.contains("not DCP") || msg.contains("NotDcp"), "Expected NotDcp error, got: {}", msg);
+        assert!(
+            msg.contains("not DCP") || msg.contains("NotDcp"),
+            "Expected NotDcp error, got: {}",
+            msg
+        );
     }
 }
 
@@ -1501,8 +1664,8 @@ fn test_index_slice_in_constraint() {
     use cvxrust::atoms::slice;
 
     let x = variable(5);
-    let x_first = slice(&x, 0, 3);  // x[0:3]
-    let x_last = slice(&x, 3, 5);   // x[3:5]
+    let x_first = slice(&x, 0, 3); // x[0:3]
+    let x_last = slice(&x, 3, 5); // x[3:5]
 
     let prob = Problem::minimize(sum(&x))
         .subject_to([x_first.ge(1.0), x_last.ge(2.0)])
@@ -1520,10 +1683,18 @@ fn test_index_slice_in_constraint() {
     // Check solution values
     let x_vals = &solution[&x];
     for i in 0..3 {
-        assert!((x_vals[(i, 0)] - 1.0).abs() < TOL, "x[{}] should be ~1.0", i);
+        assert!(
+            (x_vals[(i, 0)] - 1.0).abs() < TOL,
+            "x[{}] should be ~1.0",
+            i
+        );
     }
     for i in 3..5 {
-        assert!((x_vals[(i, 0)] - 2.0).abs() < TOL, "x[{}] should be ~2.0", i);
+        assert!(
+            (x_vals[(i, 0)] - 2.0).abs() < TOL,
+            "x[{}] should be ~2.0",
+            i
+        );
     }
 }
 
@@ -1535,7 +1706,7 @@ fn test_index_single_element() {
     use cvxrust::atoms::index;
 
     let x = variable(3);
-    let x0 = index(&x, 0);  // x[0]
+    let x0 = index(&x, 0); // x[0]
 
     let prob = Problem::minimize(x0)
         .subject_to([x.ge(0.0), sum(&x).eq(5.0)])
@@ -1577,7 +1748,7 @@ fn test_transpose_in_matmul() {
 
     // Verify A.T @ A @ x gives correct shape
     let at = transpose(&a);
-    let ata = matmul(&at, &a);  // Should be 2x2
-    let atax = matmul(&ata, &x);  // Should be 2x1
+    let ata = matmul(&at, &a); // Should be 2x2
+    let atax = matmul(&ata, &x); // Should be 2x1
     assert_eq!(atax.shape(), Shape::vector(2));
 }

@@ -7,9 +7,10 @@ cvxrust provides a domain-specific language for specifying convex optimization p
 ## Features
 
 - **DCP Verification**: Automatically verifies problem convexity using disciplined convex programming rules
-- **Rich Atom Library**: Norms, quadratic forms, element-wise operations, and more
+- **Rich Atom Library**: Norms, quadratic forms, exponential/log, element-wise operations, and more
 - **Native QP Support**: Quadratic programs are solved directly (not reformulated as SOCPs)
-- **Flexible API**: Builder patterns for variables, constraints, and problems
+- **Intuitive Constraint Syntax**: Use `constraint!` macro for natural `>=`, `<=`, `==` notation
+- **Dual Variables**: Access shadow prices and sensitivity information
 - **Sparse Matrix Support**: Efficient handling of large-scale problems
 
 ## Installation
@@ -18,7 +19,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-cvxrust = "0.1"  # Once published, or use git URL: { git = "https://github.com/cvxpy/cvxrust" }
+cvxrust = "0.1"
 ```
 
 ## Quick Start
@@ -28,19 +29,44 @@ use cvxrust::prelude::*;
 
 // Minimize ||x||_2 subject to sum(x) = 1, x >= 0
 let x = variable(5);
-let objective = norm2(&x);
-let constraints = [
-    sum(&x).eq(constant(1.0)),
-    x.clone().ge(zeros(5)),
-];
 
-let solution = Problem::minimize(objective)
-    .subject_to(constraints)
+let solution = Problem::minimize(norm2(&x))
+    .subject_to([
+        constraint!((sum(&x)) == 1.0),
+        constraint!(x >= 0.0),
+    ])
     .solve()
     .unwrap();
 
-println!("Optimal value: {}", solution.value);
-println!("x = {:?}", x.value(&solution));
+println!("Optimal value: {}", solution.value.unwrap());
+println!("x = {:?}", &solution[&x]);
+```
+
+## Building and Testing
+
+```bash
+# Build the library
+cargo build
+
+# Run all tests (159 tests)
+cargo test
+
+# Run a specific test
+cargo test test_name
+
+# Run tests with output visible
+cargo test -- --nocapture
+
+# Run examples
+cargo run --example portfolio
+cargo run --example least_squares
+cargo run --example quadratic_program
+
+# Lint with clippy
+cargo clippy
+
+# Generate documentation
+cargo doc --open
 ```
 
 ## Supported Problem Classes
@@ -50,26 +76,30 @@ println!("x = {:?}", x.value(&solution));
 | **LP** | Linear | Linear equality/inequality |
 | **QP** | Quadratic (convex) | Linear equality/inequality |
 | **SOCP** | Linear | Second-order cone |
+| **Exp Cone** | Exponential/log | Exponential cone |
 | **Mixed** | Any convex | Combination of above |
 
 ## Expression Atoms
 
 ### Affine Operations
 - Arithmetic: `+`, `-`, `*` (scalar), `/` (scalar)
-- Aggregation: `sum`, `sum_axis`
-- Structural: `reshape`, `flatten`, `vstack`, `hstack`, `transpose`
+- Aggregation: `sum`, `sum_axis`, `cumsum`
+- Structural: `reshape`, `flatten`, `vstack`, `hstack`, `transpose`, `diag`
 - Linear algebra: `matmul`, `dot`, `trace`
 - Indexing: `index`, `slice`
 
 ### Convex Atoms
 - Norms: `norm1`, `norm2`, `norm_inf`, `norm`
-- Element-wise: `abs`, `pos`, `neg_part`
+- Element-wise: `abs`, `pos`, `neg_part`, `exp`
 - Aggregation: `maximum`, `max2`
 - Quadratic: `quad_form` (PSD), `sum_squares`, `quad_over_lin`
+- Powers: `power` (p >= 1 or p < 0)
 
 ### Concave Atoms
 - Aggregation: `minimum`, `min2`
 - Quadratic: `quad_form` (NSD)
+- Logarithmic: `log`, `entropy`
+- Powers: `power` (0 < p < 1), `sqrt`
 
 ## Variable Construction
 
@@ -80,25 +110,62 @@ let x = variable(5);
 // Matrix variable
 let X = variable((3, 4));
 
-// Named variable with constraints
+// Scalar variable
+let t = variable(());
+
+// Named variable with bounds
 let x = VariableBuilder::vector(5)
     .name("x")
     .nonneg()  // x >= 0
     .build();
 ```
 
-## Constraint Types
+## Constraints
+
+cvxrust provides the `constraint!` macro for natural constraint syntax:
 
 ```rust
-// Equality constraint
-expr.eq(rhs)
+use cvxrust::prelude::*;
 
-// Inequality constraints
-expr.le(rhs)  // expr <= rhs
-expr.ge(rhs)  // expr >= rhs
+let x = variable(5);
 
-// Second-order cone constraint
-Constraint::soc(t, x)  // ||x||_2 <= t
+// Using constraint! macro (recommended)
+let constraints = [
+    constraint!(x >= 0.0),           // x >= 0
+    constraint!(x <= 10.0),          // x <= 10
+    constraint!((sum(&x)) == 1.0),   // sum(x) = 1
+];
+
+// Method syntax also available
+let c1 = x.ge(0.0);   // x >= 0
+let c2 = x.le(10.0);  // x <= 10
+let c3 = sum(&x).eq(1.0);
+
+// Second-order cone constraint: ||x||_2 <= t
+let t = variable(());
+let soc = Constraint::soc(t, x);
+```
+
+## Accessing Solutions
+
+```rust
+let solution = problem.solve()?;
+
+// Check status
+assert_eq!(solution.status, SolveStatus::Optimal);
+
+// Get optimal objective value
+let value = solution.value.unwrap();
+
+// Get variable values using indexing
+let x_val = &solution[&x];
+
+// Get scalar value
+let t_val = solution.value(&t);
+
+// Access dual variables (shadow prices)
+let duals = solution.duals();
+let dual_0 = solution.constraint_dual(0);  // Dual for first constraint
 ```
 
 ## Examples
@@ -106,26 +173,43 @@ Constraint::soc(t, x)  // ||x||_2 <= t
 ### Least Squares
 ```rust
 let x = variable(n);
-let objective = sum_squares(&(A * x.clone() - b));
-let solution = Problem::minimize(objective).solve()?;
+let residual = &A * &x - &b;
+let solution = Problem::minimize(sum_squares(&residual)).solve()?;
 ```
 
 ### L1 Regularized Regression (Lasso)
 ```rust
 let x = variable(n);
-let loss = sum_squares(&(A * x.clone() - b));
+let loss = sum_squares(&(&A * &x - &b));
 let reg = norm1(&x);
-let objective = loss + lambda * reg;
-let solution = Problem::minimize(objective).solve()?;
+let solution = Problem::minimize(loss + lambda * reg).solve()?;
 ```
 
 ### Portfolio Optimization
 ```rust
-let w = VariableBuilder::vector(n).nonneg().build();
-let ret = dot(&mu, &w);
-let risk = quad_form(&w, &Sigma);
-let solution = Problem::maximize(ret - gamma * risk)
-    .subject_to([sum(&w).eq(constant(1.0))])
+let w = variable(n);
+let risk = quad_form(&w, &sigma);  // w' * Sigma * w
+
+let solution = Problem::minimize(risk)
+    .subject_to([
+        constraint!((dot(&mu, &w)) >= target_return),
+        constraint!((sum(&w)) == 1.0),
+        constraint!(w >= 0.0),
+    ])
+    .solve()?;
+
+// Access dual variable for return constraint (shadow price)
+if let Some(dual) = solution.constraint_dual(0) {
+    println!("Marginal cost of increasing return: {}", dual);
+}
+```
+
+### Logistic Regression
+```rust
+let theta = variable(n);
+// log(1 + exp(-y * X @ theta)) using log-sum-exp
+let solution = Problem::minimize(log_sum_exp_loss)
+    .subject_to([constraint!((norm2(&theta)) <= C)])
     .solve()?;
 ```
 
@@ -135,15 +219,32 @@ cvxrust enforces disciplined convex programming rules:
 
 - **Minimization** requires a **convex** objective
 - **Maximization** requires a **concave** objective
-- **Equality constraints** require **affine** expressions
-- **Inequality constraints** (`>=`) require **concave** expressions on the left
+- **Equality constraints** require **affine** expressions on both sides
+- **Inequality constraints** (`>=`) require the left side to be **concave**
+- **Inequality constraints** (`<=`) require the left side to be **convex**
 
 Problems that violate these rules will return a `DcpError`.
+
+```rust
+let x = variable(5);
+
+// Valid: minimize convex
+Problem::minimize(norm2(&x));
+
+// Valid: maximize concave
+Problem::maximize(-sum_squares(&x));
+
+// Invalid: minimize concave - returns DcpError
+Problem::minimize(-norm2(&x));
+
+// Invalid: norm2(x) >= 1 (convex >= constant) - returns DcpError
+constraint!((norm2(&x)) >= 1.0);
+```
 
 ## Architecture
 
 ```
-Expression → DCP Verification → Canonicalization → Matrix Stuffing → Clarabel → Solution
+Expression -> DCP Verification -> Canonicalization -> Matrix Stuffing -> Clarabel -> Solution
 ```
 
 1. Build expression trees using atoms and operator overloads

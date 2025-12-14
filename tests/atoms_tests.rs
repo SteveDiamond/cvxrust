@@ -42,7 +42,12 @@ fn test_exp_with_constraint() {
     assert_eq!(solution.status, SolveStatus::Optimal);
     let x_val = solution.value(&x);
     let expected = 5.0_f64.ln();
-    assert!((x_val - expected).abs() < TOL, "Expected {}, got {}", expected, x_val);
+    assert!(
+        (x_val - expected).abs() < TOL,
+        "Expected {}, got {}",
+        expected,
+        x_val
+    );
 }
 
 #[test]
@@ -60,7 +65,12 @@ fn test_log_basic() {
     assert_eq!(solution.status, SolveStatus::Optimal);
     let val = solution.value.unwrap();
     let expected = 2.0_f64.ln();
-    assert!((val - expected).abs() < TOL, "Expected {}, got {}", expected, val);
+    assert!(
+        (val - expected).abs() < TOL,
+        "Expected {}, got {}",
+        expected,
+        val
+    );
 }
 
 #[test]
@@ -72,10 +82,7 @@ fn test_log_concave() {
     let obj = -log(&x);
 
     let solution = Problem::minimize(obj)
-        .subject_to([
-            x.ge(constant(0.1)),
-            x.le(constant(1.0)),
-        ])
+        .subject_to([x.ge(constant(0.1)), x.le(constant(1.0))])
         .solve()
         .expect("Should solve");
 
@@ -92,10 +99,7 @@ fn test_entropy_basic() {
     let x = variable(());
 
     let solution = Problem::maximize(entropy(&x))
-        .subject_to([
-            x.le(constant(0.5)),
-            x.ge(constant(0.1))
-        ])
+        .subject_to([x.le(constant(0.5)), x.ge(constant(0.1))])
         .solve()
         .expect("Should solve");
 
@@ -116,10 +120,7 @@ fn test_power_p_half() {
     let obj = -sqrt(&x);
 
     let solution = Problem::minimize(obj)
-        .subject_to([
-            x.le(constant(4.0)),
-            x.ge(constant(0.01))
-        ])
+        .subject_to([x.le(constant(4.0)), x.ge(constant(0.01))])
         .solve()
         .expect("Should solve");
 
@@ -153,10 +154,7 @@ fn test_power_p_less_than_1() {
     let obj = power(&x, 0.3);
 
     let solution = Problem::maximize(obj)
-        .subject_to([
-            x.le(constant(8.0)),
-            x.ge(constant(0.1))
-        ])
+        .subject_to([x.le(constant(8.0)), x.ge(constant(0.1))])
         .solve()
         .expect("Should solve");
 
@@ -204,9 +202,7 @@ fn test_cumsum_basic() {
     let y = cumsum(&x);
 
     let solution = Problem::minimize(sum(&y))
-        .subject_to([
-            x.eq(constant_vec(vec![1.0, 2.0, 3.0]))
-        ])
+        .subject_to([x.eq(constant_vec(vec![1.0, 2.0, 3.0]))])
         .solve()
         .expect("Should solve");
 
@@ -224,10 +220,7 @@ fn test_cumsum_optimization() {
     let y = cumsum(&x);
 
     let solution = Problem::minimize(sum(&y))
-        .subject_to([
-            sum(&x).eq(constant(6.0)),
-            x.ge(constant(0.0))
-        ])
+        .subject_to([sum(&x).eq(constant(6.0)), x.ge(constant(0.0))])
         .solve()
         .expect("Should solve");
 
@@ -254,9 +247,7 @@ fn test_diag_basic() {
     let d = diag(&x);
 
     let solution = Problem::minimize(trace(&d))
-        .subject_to([
-            x.eq(constant_vec(vec![1.0, 2.0, 3.0]))
-        ])
+        .subject_to([x.eq(constant_vec(vec![1.0, 2.0, 3.0]))])
         .solve()
         .expect("Should solve");
 
@@ -288,7 +279,10 @@ fn test_dual_values_simple() {
 
     // The dual of a binding constraint should be positive
     let dual_0 = solution.constraint_dual(0).unwrap();
-    assert!(dual_0.abs() > TOL, "Dual should be non-zero for binding constraint");
+    assert!(
+        dual_0.abs() > TOL,
+        "Dual should be non-zero for binding constraint"
+    );
 }
 
 #[test]
@@ -302,7 +296,7 @@ fn test_dual_values_shadow_price() {
         .subject_to([
             (&x + &y).ge(constant(10.0)),
             x.ge(constant(0.0)),
-            y.ge(constant(0.0))
+            y.ge(constant(0.0)),
         ])
         .solve()
         .expect("Should solve");
@@ -427,10 +421,7 @@ fn test_geometric_program_equivalent() {
 
     // Simplified: just minimize x^2 subject to constraints
     let solution = Problem::minimize(x_sq)
-        .subject_to([
-            x.ge(constant(1.0)),
-            y.ge(constant(1.0))
-        ])
+        .subject_to([x.ge(constant(1.0)), y.ge(constant(1.0))])
         .solve()
         .expect("Should solve");
 

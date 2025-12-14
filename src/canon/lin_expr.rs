@@ -110,8 +110,7 @@ impl LinExpr {
         } else if other.constant.nrows() == 1 && other.constant.ncols() == 1 {
             // Broadcast scalar other to match self's shape
             let scalar = other.constant[(0, 0)];
-            self.constant
-                .map(|v| v + scalar)
+            self.constant.map(|v| v + scalar)
         } else if self.constant.nrows() == 1 && self.constant.ncols() == 1 {
             // Broadcast scalar self to match other's shape
             let scalar = self.constant[(0, 0)];
@@ -136,11 +135,7 @@ impl LinExpr {
 
     /// Negate a linear expression.
     pub fn neg(&self) -> LinExpr {
-        let coeffs = self
-            .coeffs
-            .iter()
-            .map(|(k, v)| (*k, csc_neg(v)))
-            .collect();
+        let coeffs = self.coeffs.iter().map(|(k, v)| (*k, csc_neg(v))).collect();
         LinExpr {
             coeffs,
             constant: -&self.constant,

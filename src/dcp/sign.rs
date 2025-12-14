@@ -114,8 +114,7 @@ impl Expr {
                 let bs = b.sign();
                 if as_.is_zero() || bs.is_zero() {
                     Sign::Zero
-                } else if (as_.is_nonneg() && bs.is_nonneg())
-                    || (as_.is_nonpos() && bs.is_nonpos())
+                } else if (as_.is_nonneg() && bs.is_nonneg()) || (as_.is_nonpos() && bs.is_nonpos())
                 {
                     Sign::Nonnegative
                 } else {
@@ -208,7 +207,7 @@ impl Expr {
 
             // Additional affine atoms
             Expr::Cumsum(x, _) => x.sign(), // Cumsum preserves sign
-            Expr::Diag(x) => x.sign(), // Diag preserves sign
+            Expr::Diag(x) => x.sign(),      // Diag preserves sign
         }
     }
 

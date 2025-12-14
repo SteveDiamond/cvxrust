@@ -10,13 +10,7 @@ fn main() {
     println!("=== Least Squares Regression ===\n");
 
     // Fit a line y = w0 + w1*x to data
-    let a = constant_matrix(vec![
-        1.0, 1.0,
-        1.0, 2.0,
-        1.0, 3.0,
-        1.0, 4.0,
-        1.0, 5.0,
-    ], 5, 2);
+    let a = constant_matrix(vec![1.0, 1.0, 1.0, 2.0, 1.0, 3.0, 1.0, 4.0, 1.0, 5.0], 5, 2);
     let b = constant_vec(vec![3.1, 5.2, 6.8, 9.1, 10.9]);
 
     println!("Fitting y = w0 + w1*x to 5 data points\n");

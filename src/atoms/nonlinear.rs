@@ -47,6 +47,7 @@ pub fn norm_inf(x: &Expr) -> Expr {
 /// - p = 1: L1 norm
 /// - p = 2: L2 norm
 /// - p = f64::INFINITY: Infinity norm
+///
 /// General p-norm.
 ///
 /// Currently supports p = 1, 2, or infinity.

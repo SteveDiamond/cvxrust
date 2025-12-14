@@ -29,7 +29,11 @@ pub struct ConeDims {
 impl ConeDims {
     /// Total number of constraint rows.
     pub fn total(&self) -> usize {
-        self.zero + self.nonneg + self.soc.iter().sum::<usize>() + (self.exp * 3) + (self.power.len() * 3)
+        self.zero
+            + self.nonneg
+            + self.soc.iter().sum::<usize>()
+            + (self.exp * 3)
+            + (self.power.len() * 3)
     }
 }
 
@@ -136,8 +140,7 @@ fn stuff_objective(objective: &QuadExpr, var_map: &VariableMap) -> (CscMatrix<f6
     let mut p_vals = Vec::new();
 
     for ((var_i, var_j), coeff) in &objective.quad_coeffs {
-        if let (Some((start_i, _)), Some((start_j, _))) =
-            (var_map.get(*var_i), var_map.get(*var_j))
+        if let (Some((start_i, _)), Some((start_j, _))) = (var_map.get(*var_i), var_map.get(*var_j))
         {
             for (row, col, val) in coeff.triplet_iter() {
                 let global_row = start_i + row;
@@ -391,6 +394,7 @@ fn stuff_constraints(
 ///
 /// This function uses the convention where negate=false for Zero cone
 /// and negate=true for NonNeg cone (handled by caller negating the expr).
+#[allow(clippy::too_many_arguments)]
 fn stuff_linear_expr(
     expr: &LinExpr,
     var_map: &VariableMap,
@@ -398,7 +402,7 @@ fn stuff_linear_expr(
     a_rows: &mut Vec<usize>,
     a_cols: &mut Vec<usize>,
     a_vals: &mut Vec<f64>,
-    b: &mut Vec<f64>,
+    b: &mut [f64],
     negate: bool,
 ) {
     let sign = if negate { -1.0 } else { 1.0 };
@@ -464,8 +468,8 @@ mod tests {
             zero: 2,
             nonneg: 3,
             soc: vec![4, 5],
-            exp: 2,          // 2 exp cones = 6 rows
-            power: vec![0.5, 0.7],  // 2 power cones = 6 rows
+            exp: 2,                // 2 exp cones = 6 rows
+            power: vec![0.5, 0.7], // 2 power cones = 6 rows
         };
         // 2 + 3 + 4 + 5 + 6 + 6 = 26
         assert_eq!(dims.total(), 26);

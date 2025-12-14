@@ -115,10 +115,7 @@ impl Problem {
     }
 
     /// Recursively collect variable shapes from an expression.
-    fn collect_variable_shapes(
-        expr: &Expr,
-        shapes: &mut std::collections::HashMap<ExprId, Shape>,
-    ) {
+    fn collect_variable_shapes(expr: &Expr, shapes: &mut std::collections::HashMap<ExprId, Shape>) {
         match expr {
             Expr::Variable(v) => {
                 shapes.insert(v.id, v.shape.clone());
@@ -149,7 +146,10 @@ impl Problem {
             | Expr::Diag(a) => {
                 Self::collect_variable_shapes(a, shapes);
             }
-            Expr::VStack(exprs) | Expr::HStack(exprs) | Expr::Maximum(exprs) | Expr::Minimum(exprs) => {
+            Expr::VStack(exprs)
+            | Expr::HStack(exprs)
+            | Expr::Maximum(exprs)
+            | Expr::Minimum(exprs) => {
                 for e in exprs {
                     Self::collect_variable_shapes(e, shapes);
                 }
@@ -184,10 +184,7 @@ impl Problem {
         let obj_quad = obj_canon.expr.into_quadratic();
 
         // Collect all variables (original + auxiliary) with their shapes
-        let mut all_vars: Vec<(ExprId, Shape)> = self
-            .variable_shapes()
-            .into_iter()
-            .collect();
+        let mut all_vars: Vec<(ExprId, Shape)> = self.variable_shapes().into_iter().collect();
 
         // Add auxiliary variables from objective canonicalization
         all_vars.extend(obj_canon.aux_vars);
@@ -398,9 +395,7 @@ mod tests {
     fn test_problem_with_constraints() {
         let x = variable(5);
         let c = constant(1.0);
-        let problem = Problem::minimize(sum(&x))
-            .subject_to([x.ge(c)])
-            .build();
+        let problem = Problem::minimize(sum(&x)).subject_to([x.ge(c)]).build();
         assert!(problem.is_dcp());
     }
 

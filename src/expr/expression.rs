@@ -299,9 +299,15 @@ impl Expr {
             Expr::Constant(c) => c.shape(),
 
             // Affine
-            Expr::Add(a, b) => a.shape().broadcast(&b.shape()).unwrap_or_else(Shape::scalar),
+            Expr::Add(a, b) => a
+                .shape()
+                .broadcast(&b.shape())
+                .unwrap_or_else(Shape::scalar),
             Expr::Neg(a) => a.shape(),
-            Expr::Mul(a, b) => a.shape().broadcast(&b.shape()).unwrap_or_else(Shape::scalar),
+            Expr::Mul(a, b) => a
+                .shape()
+                .broadcast(&b.shape())
+                .unwrap_or_else(Shape::scalar),
             Expr::Sum(a, axis) => {
                 if axis.is_some() {
                     // Sum along axis reduces that dimension

@@ -68,7 +68,10 @@ fn main() {
         // of increasing the return target (in terms of variance)
         println!("  Return constraint dual: {:.4}", dual_return);
         println!("  Interpretation: Increasing target return by 1% would");
-        println!("  increase portfolio variance by ~{:.4}", dual_return.abs() * 0.01);
+        println!(
+            "  increase portfolio variance by ~{:.4}",
+            dual_return.abs() * 0.01
+        );
     }
 
     // Efficient frontier
@@ -87,7 +90,11 @@ fn main() {
             .solve()
         {
             let std = sol.value.unwrap().sqrt();
-            println!("  Return: {:.1}%  →  Risk: {:.2}%", target * 100.0, std * 100.0);
+            println!(
+                "  Return: {:.1}%  →  Risk: {:.2}%",
+                target * 100.0,
+                std * 100.0
+            );
         }
     }
 

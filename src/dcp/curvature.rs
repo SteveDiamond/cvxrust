@@ -25,12 +25,18 @@ pub enum Curvature {
 impl Curvature {
     /// Check if the curvature is convex (constant, affine, or convex).
     pub fn is_convex(self) -> bool {
-        matches!(self, Curvature::Constant | Curvature::Affine | Curvature::Convex)
+        matches!(
+            self,
+            Curvature::Constant | Curvature::Affine | Curvature::Convex
+        )
     }
 
     /// Check if the curvature is concave (constant, affine, or concave).
     pub fn is_concave(self) -> bool {
-        matches!(self, Curvature::Constant | Curvature::Affine | Curvature::Concave)
+        matches!(
+            self,
+            Curvature::Constant | Curvature::Affine | Curvature::Concave
+        )
     }
 
     /// Check if the curvature is affine (constant or affine).
@@ -301,7 +307,7 @@ impl Expr {
 
             // Additional affine atoms
             Expr::Cumsum(x, _) => x.curvature(), // Affine operation
-            Expr::Diag(x) => x.curvature(), // Affine operation
+            Expr::Diag(x) => x.curvature(),      // Affine operation
         }
     }
 

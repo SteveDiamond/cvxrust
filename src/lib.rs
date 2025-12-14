@@ -90,8 +90,8 @@ pub mod prelude {
     };
 
     // Constraints
-    pub use crate::constraints::{Constraint, ConstraintExt};
     pub use crate::constraint;
+    pub use crate::constraints::{Constraint, ConstraintExt};
 
     // DCP
     pub use crate::dcp::{Curvature, Sign};

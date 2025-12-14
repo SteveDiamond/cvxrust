@@ -27,10 +27,7 @@ fn main() {
 
     // Coefficients
     let c = constant_vec(vec![3.0, 2.0, 5.0]);
-    let a = constant_matrix(vec![
-        2.0, 1.0, 3.0,
-        1.0, 2.0, 1.0,
-    ], 2, 3);
+    let a = constant_matrix(vec![2.0, 1.0, 3.0, 1.0, 2.0, 1.0], 2, 3);
     let b = constant_vec(vec![100.0, 80.0]);
 
     // Objective: maximize c'x (minimize -c'x)
@@ -39,10 +36,7 @@ fn main() {
     // Solve
     println!("Solving...");
     let solution = Problem::minimize(objective)
-        .subject_to([
-            constraint!((matmul(&a, &x)) <= b),
-            constraint!(x >= 0.0),
-        ])
+        .subject_to([constraint!((matmul(&a, &x)) <= b), constraint!(x >= 0.0)])
         .solve()
         .expect("Failed to solve");
 

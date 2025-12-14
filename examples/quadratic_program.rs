@@ -25,10 +25,7 @@ fn main() {
     // Solve
     println!("Solving...");
     let solution = Problem::minimize(objective)
-        .subject_to([
-            constraint!((sum(&x)) == 4.0),
-            constraint!(x >= 0.0),
-        ])
+        .subject_to([constraint!((sum(&x)) == 4.0), constraint!(x >= 0.0)])
         .solve()
         .expect("Failed to solve");
 

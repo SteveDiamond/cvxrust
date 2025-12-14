@@ -12,7 +12,7 @@ use nalgebra_sparse::CscMatrix;
 
 use super::lin_expr::{LinExpr, QuadExpr};
 use crate::expr::{Array, Expr, ExprId, IndexSpec, Shape, VariableBuilder};
-use crate::sparse::{csc_vstack, csc_repeat_rows, dense_to_csc, csc_to_dense};
+use crate::sparse::{csc_repeat_rows, csc_to_dense, csc_vstack, dense_to_csc};
 
 /// A cone constraint in standard form: Ax + b in K.
 #[derive(Debug, Clone)]
@@ -222,7 +222,11 @@ impl CanonContext {
     }
 
     fn canonicalize_mul(&mut self, a: &Expr, b: &Expr, for_objective: bool) -> CanonExpr {
-        // Check if one side is constant
+        // Check if expressions are constant (no variables)
+        let a_is_const = a.variables().is_empty();
+        let b_is_const = b.variables().is_empty();
+
+        // Handle scalar multiplication first (most common case)
         if let Some(arr) = a.constant_value() {
             if let Some(scalar) = arr.as_scalar() {
                 let cb = self.canonicalize_expr(b, for_objective);
@@ -242,25 +246,101 @@ impl CanonContext {
             }
         }
 
-        // Both non-constant: fall back to treating as affine (simplified)
-        let ca = self.canonicalize_expr(a, false);
-        let _cb = self.canonicalize_expr(b, false);
-        // This is a simplification - would need proper handling
-        ca
+        // Handle constant expression that evaluates to scalar
+        if a_is_const && !b_is_const {
+            let ca = self.canonicalize_expr(a, false).as_linear().clone();
+            if ca.shape.is_scalar() {
+                let scalar = ca.constant[(0, 0)];
+                let cb = self.canonicalize_expr(b, for_objective);
+                return match cb {
+                    CanonExpr::Linear(l) => CanonExpr::Linear(l.scale(scalar)),
+                    CanonExpr::Quadratic(q) => CanonExpr::Quadratic(q.scale(scalar)),
+                };
+            }
+            // Element-wise multiplication with constant vector/matrix
+            let cb = self.canonicalize_expr(b, false).as_linear().clone();
+            return CanonExpr::Linear(self.elementwise_mul_const_lin(&ca.constant, &cb));
+        }
+        if b_is_const && !a_is_const {
+            let cb = self.canonicalize_expr(b, false).as_linear().clone();
+            if cb.shape.is_scalar() {
+                let scalar = cb.constant[(0, 0)];
+                let ca = self.canonicalize_expr(a, for_objective);
+                return match ca {
+                    CanonExpr::Linear(l) => CanonExpr::Linear(l.scale(scalar)),
+                    CanonExpr::Quadratic(q) => CanonExpr::Quadratic(q.scale(scalar)),
+                };
+            }
+            // Element-wise multiplication with constant vector/matrix
+            let ca = self.canonicalize_expr(a, false).as_linear().clone();
+            return CanonExpr::Linear(self.elementwise_mul_const_lin(&cb.constant, &ca));
+        }
+        if a_is_const && b_is_const {
+            // Both constant - evaluate and return
+            let ca = self.canonicalize_expr(a, false).as_linear().clone();
+            let cb = self.canonicalize_expr(b, false).as_linear().clone();
+            let result = ca.constant.component_mul(&cb.constant);
+            return CanonExpr::Linear(LinExpr::constant(result));
+        }
+
+        // Both have variables - not DCP
+        self.canonicalize_expr(a, false)
+    }
+
+    fn elementwise_mul_const_lin(&self, c: &DMatrix<f64>, lin: &LinExpr) -> LinExpr {
+        // Element-wise multiplication: diag(c) @ lin
+        // For flat representation, this scales each row of coefficients by corresponding c value
+        let c_flat: Vec<f64> = c.iter().copied().collect();
+        let size = c_flat.len();
+
+        let mut new_coeffs = std::collections::HashMap::new();
+        for (var_id, coeff) in &lin.coeffs {
+            let coeff_dense = csc_to_dense(coeff);
+            let mut new_coeff = DMatrix::zeros(size, coeff_dense.ncols());
+            for i in 0..size.min(coeff_dense.nrows()) {
+                for j in 0..coeff_dense.ncols() {
+                    new_coeff[(i, j)] = c_flat[i] * coeff_dense[(i, j)];
+                }
+            }
+            new_coeffs.insert(*var_id, dense_to_csc(&new_coeff));
+        }
+
+        let new_const = c.component_mul(&lin.constant);
+
+        LinExpr {
+            coeffs: new_coeffs,
+            constant: new_const,
+            shape: lin.shape.clone(),
+        }
     }
 
     fn canonicalize_matmul(&mut self, a: &Expr, b: &Expr) -> CanonExpr {
-        // If A is constant, this is A @ x which is affine
-        if let Some(arr) = a.constant_value() {
-            let cb = self.canonicalize_expr(b, false).as_linear().clone();
-            return CanonExpr::Linear(self.matmul_const_lin(arr, &cb));
-        }
-        // If B is constant, this is x @ B which is also affine
-        if let Some(arr) = b.constant_value() {
+        // Check if expressions are constant (no variables, not just Constant variant)
+        let a_is_const = a.variables().is_empty();
+        let b_is_const = b.variables().is_empty();
+
+        if a_is_const && !b_is_const {
+            // A is constant expression, B has variables: A @ B is affine in B
             let ca = self.canonicalize_expr(a, false).as_linear().clone();
-            return CanonExpr::Linear(self.lin_matmul_const(&ca, arr));
+            let cb = self.canonicalize_expr(b, false).as_linear().clone();
+            let a_arr = Array::Dense(ca.constant);
+            return CanonExpr::Linear(self.matmul_const_lin(&a_arr, &cb));
         }
-        // Both non-constant: not DCP, return simplified
+        if b_is_const && !a_is_const {
+            // B is constant expression, A has variables: A @ B is affine in A
+            let ca = self.canonicalize_expr(a, false).as_linear().clone();
+            let cb = self.canonicalize_expr(b, false).as_linear().clone();
+            let b_arr = Array::Dense(cb.constant);
+            return CanonExpr::Linear(self.lin_matmul_const(&ca, &b_arr));
+        }
+        if a_is_const && b_is_const {
+            // Both constant - evaluate and return constant
+            let ca = self.canonicalize_expr(a, false).as_linear().clone();
+            let cb = self.canonicalize_expr(b, false).as_linear().clone();
+            let result = &ca.constant * &cb.constant;
+            return CanonExpr::Linear(LinExpr::constant(result));
+        }
+        // Both have variables - not DCP, return simplified
         self.canonicalize_expr(a, false)
     }
 
@@ -274,7 +354,7 @@ impl CanonContext {
             Array::Sparse(s) => csc_to_dense(s),
         };
 
-        let p = a_mat.nrows();  // rows of A
+        let p = a_mat.nrows(); // rows of A
         let m = b.shape.rows(); // rows of E (should equal a_mat.ncols())
         let n = b.shape.cols(); // cols of E and result
 
@@ -289,7 +369,9 @@ impl CanonContext {
             let mut new_coeff_data = DMatrix::zeros(new_size, var_size);
             for j in 0..var_size {
                 // Extract column j, reshape to (m, n), left-multiply by A, reshape back
-                let col: Vec<f64> = (0..coeff_dense.nrows()).map(|i| coeff_dense[(i, j)]).collect();
+                let col: Vec<f64> = (0..coeff_dense.nrows())
+                    .map(|i| coeff_dense[(i, j)])
+                    .collect();
                 // Reshape to (m, n) - column-major order
                 let mat = DMatrix::from_vec(m, n, col);
                 // Left multiply by A
@@ -324,7 +406,7 @@ impl CanonContext {
 
         let m = a.shape.rows(); // rows of E
         let n = a.shape.cols(); // cols of E (should equal b_mat.nrows())
-        let p = b_mat.ncols();  // cols of result
+        let p = b_mat.ncols(); // cols of result
 
         let mut new_coeffs = std::collections::HashMap::new();
         for (var_id, coeff) in &a.coeffs {
@@ -337,7 +419,9 @@ impl CanonContext {
             let mut new_coeff_data = DMatrix::zeros(new_size, var_size);
             for j in 0..var_size {
                 // Extract column j, reshape to (m, n), multiply by B, reshape back
-                let col: Vec<f64> = (0..coeff_dense.nrows()).map(|i| coeff_dense[(i, j)]).collect();
+                let col: Vec<f64> = (0..coeff_dense.nrows())
+                    .map(|i| coeff_dense[(i, j)])
+                    .collect();
                 // Reshape to (m, n) - column-major order
                 let mat = DMatrix::from_vec(m, n, col);
                 // Right multiply by B
@@ -372,10 +456,9 @@ impl CanonContext {
             new_coeffs.insert(*var_id, new_coeff);
         }
 
-        let flat_const = ca.constant.reshape_generic(
-            nalgebra::Dyn(size),
-            nalgebra::Dyn(1),
-        );
+        let flat_const = ca
+            .constant
+            .reshape_generic(nalgebra::Dyn(size), nalgebra::Dyn(1));
         let result = &ones * &flat_const;
         let new_const = DMatrix::from_element(1, 1, result[(0, 0)]);
 
@@ -391,10 +474,9 @@ impl CanonContext {
         // Reshape doesn't change the linear structure, just the shape interpretation
         CanonExpr::Linear(LinExpr {
             coeffs: ca.coeffs,
-            constant: ca.constant.reshape_generic(
-                nalgebra::Dyn(shape.rows()),
-                nalgebra::Dyn(shape.cols()),
-            ),
+            constant: ca
+                .constant
+                .reshape_generic(nalgebra::Dyn(shape.rows()), nalgebra::Dyn(shape.cols())),
             shape: shape.clone(),
         })
     }
@@ -425,7 +507,13 @@ impl CanonContext {
                         s_vals.push(1.0);
                     }
                 }
-                let s_mat = crate::sparse::triplets_to_csc(output_size, input_size, &s_rows, &s_cols, &s_vals);
+                let s_mat = crate::sparse::triplets_to_csc(
+                    output_size,
+                    input_size,
+                    &s_rows,
+                    &s_cols,
+                    &s_vals,
+                );
 
                 // Apply selection to each coefficient: new_A = S @ A
                 let mut new_coeffs = std::collections::HashMap::new();
@@ -438,7 +526,13 @@ impl CanonContext {
                 let const_flat: Vec<f64> = ca.constant.iter().cloned().collect();
                 let new_const_vals: Vec<f64> = output_indices
                     .iter()
-                    .map(|&i| if i < const_flat.len() { const_flat[i] } else { 0.0 })
+                    .map(|&i| {
+                        if i < const_flat.len() {
+                            const_flat[i]
+                        } else {
+                            0.0
+                        }
+                    })
                     .collect();
                 let new_const = DMatrix::from_vec(output_size, 1, new_const_vals);
 
@@ -654,9 +748,11 @@ impl CanonContext {
 
         // Constraints: t >= x, t >= -x
         // i.e., t - x >= 0, t + x >= 0
+        self.constraints.push(ConeConstraint::NonNeg {
+            a: t.add(&cx.neg()),
+        });
         self.constraints
-            .push(ConeConstraint::NonNeg { a: t.add(&cx.neg()) });
-        self.constraints.push(ConeConstraint::NonNeg { a: t.add(&cx) });
+            .push(ConeConstraint::NonNeg { a: t.add(&cx) });
 
         // Return sum(t)
         self.canonicalize_sum_lin(&t)
@@ -668,7 +764,10 @@ impl CanonContext {
         let (_, t) = self.new_nonneg_aux_var(Shape::scalar());
 
         // SOC constraint: ||x||_2 <= t
-        self.constraints.push(ConeConstraint::SOC { t: t.clone(), x: cx });
+        self.constraints.push(ConeConstraint::SOC {
+            t: t.clone(),
+            x: cx,
+        });
 
         CanonExpr::Linear(t)
     }
@@ -684,10 +783,12 @@ impl CanonContext {
         let t_expanded = self.expand_scalar(&t, size);
 
         // Constraints: t >= x_i, t >= -x_i for all i
-        self.constraints
-            .push(ConeConstraint::NonNeg { a: t_expanded.add(&cx.neg()) });
-        self.constraints
-            .push(ConeConstraint::NonNeg { a: t_expanded.add(&cx) });
+        self.constraints.push(ConeConstraint::NonNeg {
+            a: t_expanded.add(&cx.neg()),
+        });
+        self.constraints.push(ConeConstraint::NonNeg {
+            a: t_expanded.add(&cx),
+        });
 
         CanonExpr::Linear(t)
     }
@@ -699,9 +800,11 @@ impl CanonContext {
         let (_, t) = self.new_nonneg_aux_var(shape);
 
         // Constraints: t >= x, t >= -x
+        self.constraints.push(ConeConstraint::NonNeg {
+            a: t.add(&cx.neg()),
+        });
         self.constraints
-            .push(ConeConstraint::NonNeg { a: t.add(&cx.neg()) });
-        self.constraints.push(ConeConstraint::NonNeg { a: t.add(&cx) });
+            .push(ConeConstraint::NonNeg { a: t.add(&cx) });
 
         CanonExpr::Linear(t)
     }
@@ -714,8 +817,9 @@ impl CanonContext {
         let (_, t) = self.new_nonneg_aux_var(shape);
 
         // Constraint: t >= x, i.e., t - x >= 0
-        self.constraints
-            .push(ConeConstraint::NonNeg { a: t.add(&cx.neg()) });
+        self.constraints.push(ConeConstraint::NonNeg {
+            a: t.add(&cx.neg()),
+        });
 
         CanonExpr::Linear(t)
     }
@@ -738,8 +842,9 @@ impl CanonContext {
         for e in exprs {
             let ce = self.canonicalize_expr(e, false).as_linear().clone();
             // t >= x_i, i.e., t - x_i >= 0
-            self.constraints
-                .push(ConeConstraint::NonNeg { a: t.add(&ce.neg()) });
+            self.constraints.push(ConeConstraint::NonNeg {
+                a: t.add(&ce.neg()),
+            });
         }
 
         CanonExpr::Linear(t)
@@ -757,8 +862,9 @@ impl CanonContext {
         for e in exprs {
             let ce = self.canonicalize_expr(e, false).as_linear().clone();
             // t <= x_i, i.e., x_i - t >= 0
-            self.constraints
-                .push(ConeConstraint::NonNeg { a: ce.add(&t.neg()) });
+            self.constraints.push(ConeConstraint::NonNeg {
+                a: ce.add(&t.neg()),
+            });
         }
 
         CanonExpr::Linear(t)
@@ -769,17 +875,15 @@ impl CanonContext {
         let cx = self.canonicalize_expr(x, false).as_linear().clone();
 
         if for_objective {
-            if let Some(p_arr) = p.constant_value() {
-                if let Array::Dense(p_mat) = p_arr {
-                    // Build quadratic form for native QP
-                    // x' P x where x = sum_i A_i v_i + b
-                    // For now, simplified: assume x is a single variable
-                    let vars = cx.variables();
-                    if vars.len() == 1 && cx.constant.iter().all(|&v| v == 0.0) {
-                        let var_id = vars[0];
-                        let p_csc = dense_to_csc(p_mat);
-                        return CanonExpr::Quadratic(QuadExpr::quadratic(var_id, p_csc));
-                    }
+            if let Some(Array::Dense(p_mat)) = p.constant_value() {
+                // Build quadratic form for native QP
+                // x' P x where x = sum_i A_i v_i + b
+                // For now, simplified: assume x is a single variable
+                let vars = cx.variables();
+                if vars.len() == 1 && cx.constant.iter().all(|&v| v == 0.0) {
+                    let var_id = vars[0];
+                    let p_csc = dense_to_csc(p_mat);
+                    return CanonExpr::Quadratic(QuadExpr::quadratic(var_id, p_csc));
                 }
             }
         }
@@ -836,7 +940,10 @@ impl CanonContext {
         // Rotated SOC: ||x||^2 <= t * y
         // This requires proper rotated SOC support
         // Simplified: add as SOC
-        self.constraints.push(ConeConstraint::SOC { t: t.clone(), x: cx });
+        self.constraints.push(ConeConstraint::SOC {
+            t: t.clone(),
+            x: cx,
+        });
 
         CanonExpr::Linear(t)
     }
@@ -855,10 +962,10 @@ impl CanonContext {
             new_coeffs.insert(*var_id, new_coeff);
         }
 
-        let flat_const = x.constant.clone().reshape_generic(
-            nalgebra::Dyn(size),
-            nalgebra::Dyn(1),
-        );
+        let flat_const = x
+            .constant
+            .clone()
+            .reshape_generic(nalgebra::Dyn(size), nalgebra::Dyn(1));
         let result = &ones * &flat_const;
         let new_const = DMatrix::from_element(1, 1, result[(0, 0)]);
 
@@ -912,7 +1019,7 @@ impl CanonContext {
             self.constraints.push(ConeConstraint::ExpCone {
                 x: xi,
                 y: one_scalar,
-                z: ti
+                z: ti,
             });
         }
 
@@ -940,7 +1047,7 @@ impl CanonContext {
             self.constraints.push(ConeConstraint::ExpCone {
                 x: ti,
                 y: one_scalar,
-                z: xi
+                z: xi,
             });
         }
 
@@ -1013,7 +1120,7 @@ impl CanonContext {
                     x: xi,
                     y: one_scalar,
                     z: ti,
-                    alpha
+                    alpha,
                 });
             } else if p > 1.0 {
                 // x^p convex for p > 1: (t, 1, x) in K_pow(1/p) means t >= x^p
@@ -1022,7 +1129,7 @@ impl CanonContext {
                     x: ti,
                     y: one_scalar,
                     z: xi,
-                    alpha
+                    alpha,
                 });
             } else if p < 0.0 {
                 // x^p convex for p < 0: t >= x^p = 1/x^(-p)
@@ -1215,9 +1322,7 @@ fn dense_sparse_matmul(dense: &DMatrix<f64>, sparse: &CscMatrix<f64>) -> CscMatr
 
 fn stack_vertical(a: &DMatrix<f64>, b: &DMatrix<f64>) -> DMatrix<f64> {
     let mut result = DMatrix::zeros(a.nrows() + b.nrows(), a.ncols().max(b.ncols()));
-    result
-        .view_mut((0, 0), (a.nrows(), a.ncols()))
-        .copy_from(a);
+    result.view_mut((0, 0), (a.nrows(), a.ncols())).copy_from(a);
     result
         .view_mut((a.nrows(), 0), (b.nrows(), b.ncols()))
         .copy_from(b);
@@ -1226,9 +1331,7 @@ fn stack_vertical(a: &DMatrix<f64>, b: &DMatrix<f64>) -> DMatrix<f64> {
 
 fn stack_horizontal(a: &DMatrix<f64>, b: &DMatrix<f64>) -> DMatrix<f64> {
     let mut result = DMatrix::zeros(a.nrows().max(b.nrows()), a.ncols() + b.ncols());
-    result
-        .view_mut((0, 0), (a.nrows(), a.ncols()))
-        .copy_from(a);
+    result.view_mut((0, 0), (a.nrows(), a.ncols())).copy_from(a);
     result
         .view_mut((0, a.ncols()), (b.nrows(), b.ncols()))
         .copy_from(b);
@@ -1272,9 +1375,6 @@ mod tests {
         let s = Expr::SumSquares(Arc::new(x));
         let result = canonicalize(&s, true);
         // For objective, should produce quadratic or SOC
-        assert!(
-            matches!(result.expr, CanonExpr::Quadratic(_))
-                || !result.constraints.is_empty()
-        );
+        assert!(matches!(result.expr, CanonExpr::Quadratic(_)) || !result.constraints.is_empty());
     }
 }

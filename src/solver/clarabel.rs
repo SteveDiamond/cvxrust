@@ -6,8 +6,7 @@ use std::collections::HashMap;
 
 use clarabel::algebra::CscMatrix as ClarabelCsc;
 use clarabel::solver::{
-    DefaultSettingsBuilder, DefaultSolver, IPSolver, SolverStatus,
-    SupportedConeT,
+    DefaultSettingsBuilder, DefaultSolver, IPSolver, SolverStatus, SupportedConeT,
 };
 
 use super::stuffing::{ConeDims, StuffedProblem, VariableMap};
@@ -130,9 +129,9 @@ impl Solution {
     /// - The variable is not in the solution
     /// - The variable is not scalar (use index operator for vectors/matrices)
     pub fn try_value(&self, var: &crate::expr::Expr) -> crate::Result<f64> {
-        let var_id = var
-            .variable_id()
-            .ok_or_else(|| crate::CvxError::InvalidProblem("Expression is not a variable".into()))?;
+        let var_id = var.variable_id().ok_or_else(|| {
+            crate::CvxError::InvalidProblem("Expression is not a variable".into())
+        })?;
         let arr = self
             .get_value(var_id)
             .ok_or_else(|| crate::CvxError::InvalidProblem("Variable not in solution".into()))?;
@@ -172,7 +171,7 @@ impl Solution {
     /// }
     /// ```
     pub fn duals(&self) -> Option<&[f64]> {
-        self.dual.as_ref().map(|d| d.as_slice())
+        self.dual.as_deref()
     }
 
     /// Get the dual value for a specific constraint by index.
@@ -231,9 +230,7 @@ impl std::ops::Index<&crate::expr::Expr> for Solution {
     /// println!("x[0] = {}", x_vals[(0, 0)]);
     /// ```
     fn index(&self, var: &crate::expr::Expr) -> &nalgebra::DMatrix<f64> {
-        let var_id = var
-            .variable_id()
-            .expect("Expression is not a variable");
+        let var_id = var.variable_id().expect("Expression is not a variable");
         match self.get_value(var_id).expect("Variable not in solution") {
             Array::Dense(m) => m,
             Array::Scalar(_) => {
