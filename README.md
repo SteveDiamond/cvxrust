@@ -18,7 +18,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-cvxrust = { git = "https://github.com/your-username/cvxrust" }
+cvxrust = "0.1"  # Once published, or use git URL: { git = "https://github.com/cvxpy/cvxrust" }
 ```
 
 ## Quick Start

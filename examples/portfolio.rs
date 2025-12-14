@@ -1,0 +1,89 @@
+//! Portfolio Optimization Example
+//!
+//! This example demonstrates Markowitz portfolio optimization:
+//!
+//! minimize    x' Σ x                (minimize risk)
+//! subject to  μ' x >= target        (minimum return)
+//!             sum(x) = 1            (fully invested)
+//!             x >= 0                (long-only)
+
+use cvxrust::prelude::*;
+
+fn main() {
+    println!("=== Portfolio Optimization ===\n");
+
+    // 4 assets with different risk/return profiles
+    let mu = constant_vec(vec![0.12, 0.10, 0.07, 0.05]);
+
+    // Covariance matrix (risk)
+    #[rustfmt::skip]
+    let sigma = constant_matrix(vec![
+        0.04,  0.01,  0.00, -0.01,
+        0.01,  0.03,  0.00,  0.00,
+        0.00,  0.00,  0.02,  0.00,
+        -0.01,  0.00,  0.00,  0.01,
+    ], 4, 4);
+
+    println!("Assets: A, B, C, D");
+    println!("Expected returns: [12%, 10%, 7%, 5%]");
+    println!("Target return: 9%\n");
+
+    // Portfolio weights
+    let x = variable(4);
+
+    // Objective: minimize portfolio variance
+    let risk = quad_form(&x, &sigma);
+
+    // Solve
+    let target_return = 0.09;
+    let solution = Problem::minimize(risk)
+        .subject_to([
+            dot(&mu, &x).geq(&constant(target_return)),
+            sum(&x).equals(&constant(1.0)),
+            x.clone().geq(&zeros(4)),
+        ])
+        .solve()
+        .expect("Failed to solve");
+
+    // Results
+    println!("Optimal Portfolio:");
+    let x_val = solution.get_value(x.variable_id().unwrap()).unwrap();
+    let x_mat = match x_val {
+        Array::Dense(m) => m,
+        _ => panic!("Expected dense array"),
+    };
+    let assets = ["A", "B", "C", "D"];
+
+    for i in 0..4 {
+        println!("  Asset {}: {:.2}%", assets[i], x_mat[(i, 0)] * 100.0);
+    }
+
+    let variance = solution.value.unwrap();
+    let std_dev = variance.sqrt();
+    println!("\nPortfolio Statistics:");
+    println!("  Expected return: 9.00%");
+    println!("  Risk (std dev): {:.2}%", std_dev * 100.0);
+    println!("  Sharpe ratio: {:.4}", 0.09 / std_dev);
+
+    // Efficient frontier
+    println!("\n--- Efficient Frontier ---\n");
+
+    for &target in &[0.06, 0.08, 0.10, 0.12] {
+        let y = variable(4);
+        let risk_y = quad_form(&y, &sigma);
+
+        if let Ok(sol) = Problem::minimize(risk_y)
+            .subject_to([
+                dot(&mu, &y).geq(&constant(target)),
+                sum(&y).equals(&constant(1.0)),
+                y.clone().geq(&zeros(4)),
+            ])
+            .solve()
+        {
+            let std = sol.value.unwrap().sqrt();
+            println!("  Return: {:.1}%  →  Risk: {:.2}%", target * 100.0, std * 100.0);
+        }
+    }
+
+    println!("\nHigher returns require accepting higher risk!");
+}

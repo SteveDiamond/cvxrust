@@ -2,9 +2,14 @@
 name = "cvxrust"
 version = "0.1.0"
 edition = "2021"
+authors = ["CVXPY team"]
 description = "A Rust implementation of Disciplined Convex Programming"
 license = "Apache-2.0"
 repository = "https://github.com/cvxpy/cvxrust"
+documentation = "https://docs.rs/cvxrust"
+keywords = ["optimization", "convex", "dcp", "solver", "mathematical-optimization"]
+categories = ["mathematics", "algorithms", "science"]
+rust-version = "1.70"
 
 [dependencies]
 # Clarabel solver
