@@ -264,7 +264,10 @@ impl Expr {
             }
             Expr::Power(x, p) => {
                 // x^p curvature depends on p and sign of x
-                if *p == 1.0 {
+                if *p == 0.0 {
+                    // x^0 = 1 is constant
+                    Curvature::Constant
+                } else if *p == 1.0 {
                     // x^1 = x is affine
                     x.curvature()
                 } else if *p == 2.0 {
@@ -291,7 +294,7 @@ impl Expr {
                         Curvature::Unknown
                     }
                 } else {
-                    // p = 0 or other edge cases
+                    // Other edge cases (NaN, etc.)
                     Curvature::Unknown
                 }
             }

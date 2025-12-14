@@ -11,7 +11,7 @@ use nalgebra::DMatrix;
 use nalgebra_sparse::CscMatrix;
 
 use super::lin_expr::{LinExpr, QuadExpr};
-use crate::expr::{Array, Expr, ExprId, Shape, VariableBuilder};
+use crate::expr::{Array, Expr, ExprId, IndexSpec, Shape, VariableBuilder};
 use crate::sparse::{csc_vstack, csc_repeat_rows, dense_to_csc, csc_to_dense};
 
 /// A cone constraint in standard form: Ax + b in K.
@@ -178,10 +178,7 @@ impl CanonContext {
             Expr::MatMul(a, b) => self.canonicalize_matmul(a, b),
             Expr::Sum(a, axis) => self.canonicalize_sum(a, *axis),
             Expr::Reshape(a, shape) => self.canonicalize_reshape(a, shape),
-            Expr::Index(a, _spec) => {
-                // For now, treat index as identity (simplified)
-                self.canonicalize_expr(a, false)
-            }
+            Expr::Index(a, spec) => self.canonicalize_index(a, spec),
             Expr::VStack(exprs) => self.canonicalize_vstack(exprs),
             Expr::HStack(exprs) => self.canonicalize_hstack(exprs),
             Expr::Transpose(a) => self.canonicalize_transpose(a),
@@ -402,6 +399,64 @@ impl CanonContext {
         })
     }
 
+    fn canonicalize_index(&mut self, a: &Expr, spec: &IndexSpec) -> CanonExpr {
+        let ca = self.canonicalize_expr(a, false).as_linear().clone();
+
+        // For now, handle the common case: 1D vector indexing with a single range
+        // The LinExpr stores data in column-major (flattened) order
+        if spec.ranges.len() == 1 {
+            if let Some((start, stop, step)) = spec.ranges[0] {
+                // Simple range indexing on a vector
+                let input_size = ca.shape.size();
+
+                // Compute output indices
+                let output_indices: Vec<usize> = (start..stop).step_by(step).collect();
+                let output_size = output_indices.len();
+
+                // Build selection matrix: S[i, output_indices[i]] = 1
+                // S has shape (output_size, input_size)
+                let mut s_rows = Vec::new();
+                let mut s_cols = Vec::new();
+                let mut s_vals = Vec::new();
+                for (out_idx, &in_idx) in output_indices.iter().enumerate() {
+                    if in_idx < input_size {
+                        s_rows.push(out_idx);
+                        s_cols.push(in_idx);
+                        s_vals.push(1.0);
+                    }
+                }
+                let s_mat = crate::sparse::triplets_to_csc(output_size, input_size, &s_rows, &s_cols, &s_vals);
+
+                // Apply selection to each coefficient: new_A = S @ A
+                let mut new_coeffs = std::collections::HashMap::new();
+                for (var_id, coeff) in &ca.coeffs {
+                    let new_coeff = crate::sparse::csc_matmul(&s_mat, coeff);
+                    new_coeffs.insert(*var_id, new_coeff);
+                }
+
+                // Apply selection to constant: flatten, select rows, reshape
+                let const_flat: Vec<f64> = ca.constant.iter().cloned().collect();
+                let new_const_vals: Vec<f64> = output_indices
+                    .iter()
+                    .map(|&i| if i < const_flat.len() { const_flat[i] } else { 0.0 })
+                    .collect();
+                let new_const = DMatrix::from_vec(output_size, 1, new_const_vals);
+
+                let new_shape = Shape::vector(output_size);
+
+                return CanonExpr::Linear(LinExpr {
+                    coeffs: new_coeffs,
+                    constant: new_const,
+                    shape: new_shape,
+                });
+            }
+        }
+
+        // Fallback for None ranges (take all) - return unchanged
+        // Note: 2D matrix indexing could be added in future versions
+        CanonExpr::Linear(ca)
+    }
+
     fn canonicalize_vstack(&mut self, exprs: &[Arc<Expr>]) -> CanonExpr {
         if exprs.is_empty() {
             return CanonExpr::Linear(LinExpr::zeros(Shape::scalar()));
@@ -503,11 +558,46 @@ impl CanonContext {
 
     fn canonicalize_transpose(&mut self, a: &Expr) -> CanonExpr {
         let ca = self.canonicalize_expr(a, false).as_linear().clone();
-        // Transpose the shape and constant
+        let m = ca.shape.rows();
+        let n = ca.shape.cols();
         let new_shape = ca.shape.transpose();
+
+        // Transpose the constant matrix
         let new_const = ca.constant.transpose();
+
+        // For coefficients: we need to permute rows to match the transpose
+        // Original flat index: i + j*m (column-major for m×n matrix)
+        // Transposed flat index: j + i*n (column-major for n×m matrix)
+        // Build permutation: perm[old_idx] = new_idx
+        let size = m * n;
+        let mut perm = vec![0usize; size];
+        for j in 0..n {
+            for i in 0..m {
+                let old_idx = i + j * m;
+                let new_idx = j + i * n;
+                perm[old_idx] = new_idx;
+            }
+        }
+
+        // Apply permutation to each coefficient matrix
+        let mut new_coeffs = std::collections::HashMap::new();
+        for (var_id, coeff) in &ca.coeffs {
+            // coeff has shape (size, var_size)
+            // We need to permute rows according to perm
+            let coeff_dense = csc_to_dense(coeff);
+            let var_size = coeff_dense.ncols();
+            let mut new_coeff = DMatrix::zeros(size, var_size);
+            for old_row in 0..size {
+                let new_row = perm[old_row];
+                for col in 0..var_size {
+                    new_coeff[(new_row, col)] = coeff_dense[(old_row, col)];
+                }
+            }
+            new_coeffs.insert(*var_id, dense_to_csc(&new_coeff));
+        }
+
         CanonExpr::Linear(LinExpr {
-            coeffs: ca.coeffs, // Coefficients need transpose too (simplified)
+            coeffs: new_coeffs,
             constant: new_const,
             shape: new_shape,
         })
@@ -1071,9 +1161,41 @@ impl CanonContext {
                 shape: Shape::matrix(n, n),
             })
         } else {
-            // Matrix -> diagonal vector (not implemented in v1.0)
-            // For now, just return the input as a fallback
-            CanonExpr::Linear(cx)
+            // Matrix -> diagonal vector: extract diagonal elements
+            let m = cx.shape.rows();
+            let n = cx.shape.cols();
+            let diag_size = m.min(n);
+
+            // Build selection: output[i] = input[i,i] = input[i + i*m] (column-major)
+            let mut new_coeffs = std::collections::HashMap::new();
+            for (var_id, coeff) in &cx.coeffs {
+                let coeff_dense = csc_to_dense(coeff);
+                let var_size = coeff_dense.ncols();
+                let mut new_coeff = DMatrix::zeros(diag_size, var_size);
+
+                for j in 0..var_size {
+                    for i in 0..diag_size {
+                        // Diagonal element (i,i) in column-major is at index i + i*m
+                        let input_idx = i + i * m;
+                        if input_idx < coeff_dense.nrows() {
+                            new_coeff[(i, j)] = coeff_dense[(input_idx, j)];
+                        }
+                    }
+                }
+                new_coeffs.insert(*var_id, dense_to_csc(&new_coeff));
+            }
+
+            // Extract diagonal from constant
+            let mut new_const = DMatrix::zeros(diag_size, 1);
+            for i in 0..diag_size {
+                new_const[(i, 0)] = cx.constant[(i, i)];
+            }
+
+            CanonExpr::Linear(LinExpr {
+                coeffs: new_coeffs,
+                constant: new_const,
+                shape: Shape::vector(diag_size),
+            })
         }
     }
 }

@@ -150,6 +150,23 @@ pub fn csc_hstack(a: &CscMatrix<f64>, b: &CscMatrix<f64>) -> CscMatrix<f64> {
     )
 }
 
+/// Multiply two CSC matrices: A @ B
+pub fn csc_matmul(a: &CscMatrix<f64>, b: &CscMatrix<f64>) -> CscMatrix<f64> {
+    // Use nalgebra-sparse's built-in multiplication
+    a * b
+}
+
+/// Alias for csc_from_triplets with reference arguments.
+pub fn triplets_to_csc(
+    nrows: usize,
+    ncols: usize,
+    rows: &[usize],
+    cols: &[usize],
+    vals: &[f64],
+) -> CscMatrix<f64> {
+    csc_from_triplets(nrows, ncols, rows.to_vec(), cols.to_vec(), vals.to_vec())
+}
+
 /// Repeat rows of a CSC matrix.
 pub fn csc_repeat_rows(m: &CscMatrix<f64>, times: usize) -> CscMatrix<f64> {
     let mut rows = Vec::new();

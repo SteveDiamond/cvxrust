@@ -16,7 +16,7 @@ fn test_exp_basic() {
     let obj = exp(&x);
 
     let solution = Problem::minimize(obj)
-        .subject_to([x.geq(&constant(0.0))])
+        .subject_to([x.ge(constant(0.0))])
         .solve()
         .expect("Should solve");
 
@@ -35,7 +35,7 @@ fn test_exp_with_constraint() {
     // Solution: x = log(5)
     let x = variable(());
     let solution = Problem::maximize(x.clone())
-        .subject_to([exp(&x).leq(&constant(5.0))])
+        .subject_to([exp(&x).le(constant(5.0))])
         .solve()
         .expect("Should solve");
 
@@ -53,7 +53,7 @@ fn test_log_basic() {
     let obj = log(&x);
 
     let solution = Problem::maximize(obj)
-        .subject_to([x.leq(&constant(2.0)), x.geq(&constant(0.01))])
+        .subject_to([x.le(constant(2.0)), x.ge(constant(0.01))])
         .solve()
         .expect("Should solve");
 
@@ -73,8 +73,8 @@ fn test_log_concave() {
 
     let solution = Problem::minimize(obj)
         .subject_to([
-            x.geq(&constant(0.1)),
-            x.leq(&constant(1.0)),
+            x.ge(constant(0.1)),
+            x.le(constant(1.0)),
         ])
         .solve()
         .expect("Should solve");
@@ -93,8 +93,8 @@ fn test_entropy_basic() {
 
     let solution = Problem::maximize(entropy(&x))
         .subject_to([
-            x.leq(&constant(0.5)),
-            x.geq(&constant(0.1))
+            x.le(constant(0.5)),
+            x.ge(constant(0.1))
         ])
         .solve()
         .expect("Should solve");
@@ -117,8 +117,8 @@ fn test_power_p_half() {
 
     let solution = Problem::minimize(obj)
         .subject_to([
-            x.leq(&constant(4.0)),
-            x.geq(&constant(0.01))
+            x.le(constant(4.0)),
+            x.ge(constant(0.01))
         ])
         .solve()
         .expect("Should solve");
@@ -136,7 +136,7 @@ fn test_power_p_greater_than_1() {
     let obj = power(&x, 3.0);
 
     let solution = Problem::minimize(obj)
-        .subject_to([x.geq(&constant(1.0))])
+        .subject_to([x.ge(constant(1.0))])
         .solve()
         .expect("Should solve");
 
@@ -154,8 +154,8 @@ fn test_power_p_less_than_1() {
 
     let solution = Problem::maximize(obj)
         .subject_to([
-            x.leq(&constant(8.0)),
-            x.geq(&constant(0.1))
+            x.le(constant(8.0)),
+            x.ge(constant(0.1))
         ])
         .solve()
         .expect("Should solve");
@@ -175,8 +175,8 @@ fn test_sqrt_vector() {
 
     let solution = Problem::maximize(obj)
         .subject_to([
-            x.leq(&constant_vec(vec![1.0, 4.0, 9.0])),
-            x.geq(&constant(0.01)),
+            x.le(constant_vec(vec![1.0, 4.0, 9.0])),
+            x.ge(constant(0.01)),
         ])
         .solve()
         .expect("Should solve");
@@ -205,7 +205,7 @@ fn test_cumsum_basic() {
 
     let solution = Problem::minimize(sum(&y))
         .subject_to([
-            x.equals(&constant_vec(vec![1.0, 2.0, 3.0]))
+            x.eq(constant_vec(vec![1.0, 2.0, 3.0]))
         ])
         .solve()
         .expect("Should solve");
@@ -225,8 +225,8 @@ fn test_cumsum_optimization() {
 
     let solution = Problem::minimize(sum(&y))
         .subject_to([
-            sum(&x).equals(&constant(6.0)),
-            x.geq(&constant(0.0))
+            sum(&x).eq(constant(6.0)),
+            x.ge(constant(0.0))
         ])
         .solve()
         .expect("Should solve");
@@ -255,7 +255,7 @@ fn test_diag_basic() {
 
     let solution = Problem::minimize(trace(&d))
         .subject_to([
-            x.equals(&constant_vec(vec![1.0, 2.0, 3.0]))
+            x.eq(constant_vec(vec![1.0, 2.0, 3.0]))
         ])
         .solve()
         .expect("Should solve");
@@ -276,7 +276,7 @@ fn test_dual_values_simple() {
     let x = variable(());
 
     let solution = Problem::minimize(x.clone())
-        .subject_to([x.geq(&constant(1.0))])
+        .subject_to([x.ge(constant(1.0))])
         .solve()
         .expect("Should solve");
 
@@ -300,9 +300,9 @@ fn test_dual_values_shadow_price() {
 
     let solution = Problem::minimize(&x + &y)
         .subject_to([
-            (&x + &y).geq(&constant(10.0)),
-            x.geq(&constant(0.0)),
-            y.geq(&constant(0.0))
+            (&x + &y).ge(constant(10.0)),
+            x.ge(constant(0.0)),
+            y.ge(constant(0.0))
         ])
         .solve()
         .expect("Should solve");
@@ -402,7 +402,7 @@ fn test_logistic_regression_setup() {
 
     // And verify it solves correctly
     let solution = Problem::minimize(loss)
-        .subject_to([x.geq(&constant(-2.0))])
+        .subject_to([x.ge(constant(-2.0))])
         .solve()
         .expect("Should solve");
 
@@ -428,8 +428,8 @@ fn test_geometric_program_equivalent() {
     // Simplified: just minimize x^2 subject to constraints
     let solution = Problem::minimize(x_sq)
         .subject_to([
-            x.geq(&constant(1.0)),
-            y.geq(&constant(1.0))
+            x.ge(constant(1.0)),
+            y.ge(constant(1.0))
         ])
         .solve()
         .expect("Should solve");

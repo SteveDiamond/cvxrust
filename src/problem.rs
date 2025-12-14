@@ -399,7 +399,7 @@ mod tests {
         let x = variable(5);
         let c = constant(1.0);
         let problem = Problem::minimize(sum(&x))
-            .subject_to([x.geq(&c)])
+            .subject_to([x.ge(c)])
             .build();
         assert!(problem.is_dcp());
     }
@@ -411,7 +411,7 @@ mod tests {
         let x = variable(5);
         let one = constant(1.0);
         let result = Problem::minimize(sum(&x))
-            .subject_to([x.geq(&one)])
+            .subject_to([x.ge(one)])
             .solve()
             .expect("solve failed");
 
@@ -427,7 +427,7 @@ mod tests {
         let x = variable(5);
         let five = constant(5.0);
         let result = Problem::minimize(norm2(&x))
-            .subject_to([sum(&x).equals(&five)])
+            .subject_to([sum(&x).eq(five)])
             .solve()
             .expect("solve failed");
 

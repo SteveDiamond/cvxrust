@@ -61,6 +61,16 @@ fn main() {
     println!("  Risk (std dev): {:.2}%", std_dev * 100.0);
     println!("  Sharpe ratio: {:.4}", 0.09 / std_dev);
 
+    // Dual variables (shadow prices)
+    println!("\nDual Variables (Shadow Prices):");
+    if let Some(dual_return) = solution.constraint_dual(0) {
+        // The dual of the return constraint tells us the marginal cost
+        // of increasing the return target (in terms of variance)
+        println!("  Return constraint dual: {:.4}", dual_return);
+        println!("  Interpretation: Increasing target return by 1% would");
+        println!("  increase portfolio variance by ~{:.4}", dual_return.abs() * 0.01);
+    }
+
     // Efficient frontier
     println!("\n--- Efficient Frontier ---\n");
 

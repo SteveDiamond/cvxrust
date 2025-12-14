@@ -30,8 +30,8 @@ use cvxrust::prelude::*;
 let x = variable(5);
 let objective = norm2(&x);
 let constraints = [
-    sum(&x).equals(&constant(1.0)),
-    x.clone().geq(&zeros(5)),
+    sum(&x).eq(constant(1.0)),
+    x.clone().ge(zeros(5)),
 ];
 
 let solution = Problem::minimize(objective)
@@ -91,11 +91,11 @@ let x = VariableBuilder::vector(5)
 
 ```rust
 // Equality constraint
-expr.equals(&rhs)
+expr.eq(rhs)
 
 // Inequality constraints
-expr.leq(&rhs)  // expr <= rhs
-expr.geq(&rhs)  // expr >= rhs
+expr.le(rhs)  // expr <= rhs
+expr.ge(rhs)  // expr >= rhs
 
 // Second-order cone constraint
 Constraint::soc(t, x)  // ||x||_2 <= t
@@ -125,7 +125,7 @@ let w = VariableBuilder::vector(n).nonneg().build();
 let ret = dot(&mu, &w);
 let risk = quad_form(&w, &Sigma);
 let solution = Problem::maximize(ret - gamma * risk)
-    .subject_to([sum(&w).equals(&constant(1.0))])
+    .subject_to([sum(&w).eq(constant(1.0))])
     .solve()?;
 ```
 

@@ -47,17 +47,46 @@ pub fn norm_inf(x: &Expr) -> Expr {
 /// - p = 1: L1 norm
 /// - p = 2: L2 norm
 /// - p = f64::INFINITY: Infinity norm
+/// General p-norm.
+///
+/// Currently supports p = 1, 2, or infinity.
+///
+/// # Panics
+///
+/// Panics if p is not 1, 2, or infinity. Use `try_norm()` for explicit error handling.
+///
+/// # Example
+///
+/// ```
+/// use cvxrust::prelude::*;
+///
+/// let x = variable(5);
+/// let n = norm(&x, 2.0);  // Same as norm2(&x)
+/// ```
 pub fn norm(x: &Expr, p: f64) -> Expr {
+    try_norm(x, p).expect("unsupported norm p-value")
+}
+
+/// General p-norm, returning an error for unsupported p values.
+///
+/// This is the fallible version of `norm()`. Use this when you need
+/// explicit error handling for the p parameter.
+///
+/// # Errors
+///
+/// Returns an error if p is not 1, 2, or infinity.
+pub fn try_norm(x: &Expr, p: f64) -> crate::Result<Expr> {
     if p == 1.0 {
-        norm1(x)
+        Ok(norm1(x))
     } else if p == 2.0 {
-        norm2(x)
+        Ok(norm2(x))
     } else if p.is_infinite() {
-        norm_inf(x)
+        Ok(norm_inf(x))
     } else {
-        // For other p values, we'd need a general pnorm atom
-        // For now, only support 1, 2, inf
-        panic!("Only p=1, 2, or inf supported for now");
+        Err(crate::CvxError::InvalidProblem(format!(
+            "norm p={} is not supported; use p=1, 2, or inf",
+            p
+        )))
     }
 }
 

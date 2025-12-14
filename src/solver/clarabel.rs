@@ -108,14 +108,40 @@ impl Solution {
     ///
     /// let x_val = solution.value(&x);
     /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if the expression is not a variable, the variable is not in the
+    /// solution, or the variable is not scalar. Use `try_value()` for explicit
+    /// error handling, or index operator `solution[&x]` for vectors/matrices.
     pub fn value(&self, var: &crate::expr::Expr) -> f64 {
+        self.try_value(var).expect("failed to get scalar value")
+    }
+
+    /// Get scalar value for a variable, returning an error on failure.
+    ///
+    /// This is the fallible version of `value()`. Use this when you need
+    /// explicit error handling.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The expression is not a variable
+    /// - The variable is not in the solution
+    /// - The variable is not scalar (use index operator for vectors/matrices)
+    pub fn try_value(&self, var: &crate::expr::Expr) -> crate::Result<f64> {
         let var_id = var
             .variable_id()
-            .expect("Expression is not a variable");
-        match self.get_value(var_id).expect("Variable not in solution") {
-            Array::Scalar(v) => *v,
-            Array::Dense(m) if m.nrows() == 1 && m.ncols() == 1 => m[(0, 0)],
-            _ => panic!("Variable is not scalar"),
+            .ok_or_else(|| crate::CvxError::InvalidProblem("Expression is not a variable".into()))?;
+        let arr = self
+            .get_value(var_id)
+            .ok_or_else(|| crate::CvxError::InvalidProblem("Variable not in solution".into()))?;
+        match arr {
+            Array::Scalar(v) => Ok(*v),
+            Array::Dense(m) if m.nrows() == 1 && m.ncols() == 1 => Ok(m[(0, 0)]),
+            _ => Err(crate::CvxError::InvalidProblem(
+                "Variable is not scalar; use index operator for vectors/matrices".into(),
+            )),
         }
     }
 
@@ -137,7 +163,7 @@ impl Solution {
     ///
     /// let x = variable(2);
     /// let solution = Problem::minimize(sum(&x))
-    ///     .subject_to([x.geq(&constant(1.0))])
+    ///     .subject_to([x.ge(constant(1.0))])
     ///     .solve()
     ///     .unwrap();
     ///
@@ -162,7 +188,7 @@ impl Solution {
     /// let x = variable(2);
     /// let solution = Problem::minimize(sum(&x))
     ///     .subject_to([
-    ///         x.geq(&constant(1.0)),  // Constraint 0
+    ///         x.ge(constant(1.0)),  // Constraint 0
     ///     ])
     ///     .solve()
     ///     .unwrap();

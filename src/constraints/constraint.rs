@@ -145,37 +145,22 @@ impl Constraint {
 /// Extension trait for creating constraints from expressions.
 pub trait ConstraintExt {
     /// Create equality constraint: self == rhs.
-    fn equals(&self, rhs: &Expr) -> Constraint;
-
-    /// Create inequality constraint: self <= rhs.
-    fn leq(&self, rhs: &Expr) -> Constraint;
-
-    /// Create inequality constraint: self >= rhs.
-    fn geq(&self, rhs: &Expr) -> Constraint;
-
-    /// Create equality constraint: self == rhs (short form with auto-conversion).
+    ///
+    /// The rhs can be any type that converts to Expr (f64, Vec, etc.).
     fn eq<E: Into<Expr>>(&self, rhs: E) -> Constraint;
 
-    /// Create inequality constraint: self <= rhs (short form with auto-conversion).
+    /// Create inequality constraint: self <= rhs.
+    ///
+    /// The rhs can be any type that converts to Expr (f64, Vec, etc.).
     fn le<E: Into<Expr>>(&self, rhs: E) -> Constraint;
 
-    /// Create inequality constraint: self >= rhs (short form with auto-conversion).
+    /// Create inequality constraint: self >= rhs.
+    ///
+    /// The rhs can be any type that converts to Expr (f64, Vec, etc.).
     fn ge<E: Into<Expr>>(&self, rhs: E) -> Constraint;
 }
 
 impl ConstraintExt for Expr {
-    fn equals(&self, rhs: &Expr) -> Constraint {
-        Constraint::eq(self.clone(), rhs.clone())
-    }
-
-    fn leq(&self, rhs: &Expr) -> Constraint {
-        Constraint::leq(self.clone(), rhs.clone())
-    }
-
-    fn geq(&self, rhs: &Expr) -> Constraint {
-        Constraint::geq(self.clone(), rhs.clone())
-    }
-
     fn eq<E: Into<Expr>>(&self, rhs: E) -> Constraint {
         Constraint::eq(self.clone(), rhs.into())
     }
@@ -298,14 +283,15 @@ mod tests {
     #[test]
     fn test_constraint_ext() {
         let x = variable(5);
-        let c = constant(1.0);
 
-        let eq_constr = x.equals(&c);
+        let eq_constr = x.eq(1.0);
         assert!(eq_constr.is_dcp());
 
-        let x = variable(5);
-        let leq_constr = x.leq(&c);
-        assert!(leq_constr.is_dcp());
+        let le_constr = x.le(2.0);
+        assert!(le_constr.is_dcp());
+
+        let ge_constr = x.ge(0.0);
+        assert!(ge_constr.is_dcp());
     }
 
     #[test]

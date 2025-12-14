@@ -26,7 +26,7 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 // optimal: x = [1,1,1,1,1], value = 5
                 let x = variable(5);
                 let prob = Problem::minimize(sum(&x))
-                    .subject_to([x.geq(&constant(1.0))])
+                    .subject_to([x.ge(constant(1.0))])
                     .build();
                 (prob, 5.0)
             },
@@ -38,7 +38,7 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 // optimal: x = [2,2,2], value = 6
                 let x = variable(3);
                 let prob = Problem::minimize(sum(&x))
-                    .subject_to([x.equals(&constant(2.0))])
+                    .subject_to([x.eq(constant(2.0))])
                     .build();
                 (prob, 6.0)
             },
@@ -51,7 +51,7 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 let x = variable(4);
                 let neg_sum = &constant(-1.0) * &sum(&x);
                 let prob = Problem::minimize(neg_sum)
-                    .subject_to([x.leq(&constant(3.0))])
+                    .subject_to([x.le(constant(3.0))])
                     .build();
                 (prob, -12.0)
             },
@@ -65,7 +65,7 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 let y = variable(1);
                 let obj = &(&constant(2.0) * &x) + &(&constant(3.0) * &y);
                 let prob = Problem::minimize(obj)
-                    .subject_to([x.geq(&constant(1.0)), y.geq(&constant(2.0))])
+                    .subject_to([x.ge(constant(1.0)), y.ge(constant(2.0))])
                     .build();
                 (prob, 8.0)
             },
@@ -79,7 +79,7 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 // optimal: x = [1,1,1,1,1], value = sqrt(5)
                 let x = variable(5);
                 let prob = Problem::minimize(norm2(&x))
-                    .subject_to([sum(&x).equals(&constant(5.0))])
+                    .subject_to([sum(&x).eq(constant(5.0))])
                     .build();
                 (prob, 5.0_f64.sqrt())
             },
@@ -92,7 +92,7 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 let x = variable(3);
                 let obj = &norm2(&x) + &constant(1.0);
                 let prob = Problem::minimize(obj)
-                    .subject_to([x.equals(&constant(0.0))])
+                    .subject_to([x.eq(constant(0.0))])
                     .build();
                 (prob, 1.0)
             },
@@ -104,7 +104,7 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 // optimal: x = [1,1,1], value = 3
                 let x = variable(3);
                 let prob = Problem::minimize(norm1(&x))
-                    .subject_to([sum(&x).equals(&constant(3.0))])
+                    .subject_to([sum(&x).eq(constant(3.0))])
                     .build();
                 (prob, 3.0)
             },
@@ -116,7 +116,7 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 // optimal: x = [1,1,1,1], value = 1
                 let x = variable(4);
                 let prob = Problem::minimize(norm_inf(&x))
-                    .subject_to([sum(&x).equals(&constant(4.0))])
+                    .subject_to([sum(&x).eq(constant(4.0))])
                     .build();
                 (prob, 1.0)
             },
@@ -130,7 +130,7 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 // optimal: x = [1,1], value = 2
                 let x = variable(2);
                 let prob = Problem::minimize(sum_squares(&x))
-                    .subject_to([sum(&x).equals(&constant(2.0))])
+                    .subject_to([sum(&x).eq(constant(2.0))])
                     .build();
                 (prob, 2.0)
             },
@@ -142,7 +142,7 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 // optimal: x = [1,1,1], value = 3
                 let x = variable(3);
                 let prob = Problem::minimize(sum_squares(&x))
-                    .subject_to([x.geq(&constant(1.0))])
+                    .subject_to([x.ge(constant(1.0))])
                     .build();
                 (prob, 3.0)
             },
@@ -156,7 +156,7 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 // value = 1 + 2 + 3 = 6
                 let x = variable(3);
                 let prob = Problem::minimize(sum(&abs(&x)))
-                    .subject_to([x.equals(&constant_vec(vec![-1.0, 2.0, -3.0]))])
+                    .subject_to([x.eq(constant_vec(vec![-1.0, 2.0, -3.0]))])
                     .build();
                 (prob, 6.0)
             },
@@ -171,8 +171,8 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 let x = variable(2);
                 let prob = Problem::minimize(sum(&pos(&x)))
                     .subject_to([
-                        x.geq(&constant(-2.0)),
-                        sum(&x).equals(&constant(1.0)),
+                        x.ge(constant(-2.0)),
+                        sum(&x).eq(constant(1.0)),
                     ])
                     .build();
                 (prob, 1.0)
@@ -188,7 +188,7 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 let x = variable(1);
                 let y = variable(1);
                 let prob = Problem::minimize(max2(&x, &y))
-                    .subject_to([x.geq(&constant(1.0)), y.geq(&constant(2.0))])
+                    .subject_to([x.ge(constant(1.0)), y.ge(constant(2.0))])
                     .build();
                 (prob, 2.0)
             },
@@ -202,7 +202,7 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 // optimal: x = [1,1,1], value = 3
                 let x = variable(3);
                 let prob = Problem::minimize(sum(&x))
-                    .subject_to([x.geq(&constant(1.0)), x.leq(&constant(2.0))])
+                    .subject_to([x.ge(constant(1.0)), x.le(constant(2.0))])
                     .build();
                 (prob, 3.0)
             },
@@ -215,8 +215,8 @@ fn minimize_test_cases() -> Vec<TestCase> {
                 let x = variable(3);
                 let prob = Problem::minimize(norm2(&x))
                     .subject_to([
-                        x.geq(&constant(0.0)),
-                        sum(&x).equals(&constant(3.0)),
+                        x.ge(constant(0.0)),
+                        sum(&x).eq(constant(3.0)),
                     ])
                     .build();
                 (prob, 3.0_f64.sqrt())
@@ -235,7 +235,7 @@ fn maximize_test_cases() -> Vec<TestCase> {
                 // optimal: x = [2,2,2], value = 6
                 let x = variable(3);
                 let prob = Problem::maximize(sum(&x))
-                    .subject_to([x.leq(&constant(2.0))])
+                    .subject_to([x.le(constant(2.0))])
                     .build();
                 (prob, 6.0)
             },
@@ -248,7 +248,7 @@ fn maximize_test_cases() -> Vec<TestCase> {
                 let x = variable(1);
                 let y = variable(1);
                 let prob = Problem::maximize(min2(&x, &y))
-                    .subject_to([x.leq(&constant(3.0)), y.leq(&constant(2.0))])
+                    .subject_to([x.le(constant(3.0)), y.le(constant(2.0))])
                     .build();
                 (prob, 2.0)
             },
@@ -261,7 +261,7 @@ fn maximize_test_cases() -> Vec<TestCase> {
                 let x = variable(2);
                 let neg_norm = &constant(-1.0) * &norm2(&x);
                 let prob = Problem::maximize(neg_norm)
-                    .subject_to([sum(&x).equals(&constant(0.0))])
+                    .subject_to([sum(&x).eq(constant(0.0))])
                     .build();
                 (prob, 0.0)
             },
@@ -278,7 +278,7 @@ fn infeasible_test_cases() -> Vec<(&'static str, Problem)> {
                 // x >= 1 and x <= 0 is infeasible
                 let x = variable(3);
                 Problem::minimize(sum(&x))
-                    .subject_to([x.geq(&constant(1.0)), x.leq(&constant(0.0))])
+                    .subject_to([x.ge(constant(1.0)), x.le(constant(0.0))])
                     .build()
             },
         ),
@@ -288,7 +288,7 @@ fn infeasible_test_cases() -> Vec<(&'static str, Problem)> {
                 // x == 1 and x == 2 is infeasible
                 let x = variable(1);
                 Problem::minimize(sum(&x))
-                    .subject_to([x.equals(&constant(1.0)), x.equals(&constant(2.0))])
+                    .subject_to([x.eq(constant(1.0)), x.eq(constant(2.0))])
                     .build()
             },
         ),
@@ -304,7 +304,7 @@ fn unbounded_test_cases() -> Vec<(&'static str, Problem)> {
                 // minimize sum(x) with only upper bound
                 let x = variable(3);
                 Problem::minimize(sum(&x))
-                    .subject_to([x.leq(&constant(1.0))])
+                    .subject_to([x.le(constant(1.0))])
                     .build()
             },
         ),
@@ -314,7 +314,7 @@ fn unbounded_test_cases() -> Vec<(&'static str, Problem)> {
                 // maximize sum(x) with only lower bound
                 let x = variable(3);
                 Problem::maximize(sum(&x))
-                    .subject_to([x.geq(&constant(1.0))])
+                    .subject_to([x.ge(constant(1.0))])
                     .build()
             },
         ),
@@ -439,7 +439,7 @@ fn test_bug_sparse_constant_becomes_zero() {
     // With sparse_const = [1, 2, 3], optimal x = [1, 2, 3], value = 6
     // BUG: sparse_const becomes [0, 0, 0], so optimal x = [0, 0, 0], value = 0
     let prob = Problem::minimize(sum(&x))
-        .subject_to([x.geq(&sparse_const)])
+        .subject_to([x.ge(sparse_const)])
         .build();
 
     assert!(prob.is_dcp(), "Problem should be DCP");
@@ -479,7 +479,7 @@ fn test_bug_right_matmul_broken() {
     // BUG: x @ A returns x unchanged, so y = x, value = 2
     let y = matmul(&x, &a);
     let prob = Problem::minimize(sum(&y))
-        .subject_to([x.geq(&constant(1.0))])
+        .subject_to([x.ge(constant(1.0))])
         .build();
 
     assert!(prob.is_dcp(), "Problem should be DCP");
@@ -522,7 +522,7 @@ fn test_bug_left_matmul_sparse_broken() {
     // BUG: A @ x returns x unchanged (for sparse A), so y = x, value = 2
     let y = matmul(&a, &x);
     let prob = Problem::minimize(sum(&y))
-        .subject_to([x.geq(&constant(1.0))])
+        .subject_to([x.ge(constant(1.0))])
         .build();
 
     assert!(prob.is_dcp(), "Problem should be DCP");
@@ -552,7 +552,7 @@ fn test_primal_values() {
     // Test that we can recover the optimal x values, not just objective
     let x = variable(3);
     let result = Problem::minimize(sum(&x))
-        .subject_to([x.geq(&constant(2.0))])
+        .subject_to([x.ge(constant(2.0))])
         .solve()
         .expect("should solve");
 
@@ -591,7 +591,7 @@ fn test_neg_part() {
     // neg_part(x) = max(-x, 0), so positive x contributes 0, negative x contributes |x|
     // With sum(x) = 0 and minimizing sum(neg_part(x)), optimal is x = [0, 0, 0], value = 0
     let prob = Problem::minimize(sum(&neg_part(&x)))
-        .subject_to([sum(&x).equals(&constant(0.0))])
+        .subject_to([sum(&x).eq(constant(0.0))])
         .build();
 
     assert!(prob.is_dcp(), "neg_part problem should be DCP");
@@ -620,7 +620,7 @@ fn test_quad_form_psd() {
     // x1 = 3/5 = 0.6, x2 = 2/5 = 0.4
     // value = 2*(0.6)^2 + 3*(0.4)^2 = 2*0.36 + 3*0.16 = 0.72 + 0.48 = 1.2
     let prob = Problem::minimize(quad_form(&x, &p))
-        .subject_to([sum(&x).equals(&constant(1.0))])
+        .subject_to([sum(&x).eq(constant(1.0))])
         .build();
 
     assert!(prob.is_dcp(), "quad_form(x, PSD) should be DCP for minimize");
@@ -643,7 +643,7 @@ fn test_hstack() {
     // minimize sum(hstack) s.t. x >= 1, y >= 2
     let h = hstack(vec![x.clone(), y.clone()]);
     let prob = Problem::minimize(sum(&h))
-        .subject_to([x.geq(&constant(1.0)), y.geq(&constant(2.0))])
+        .subject_to([x.ge(constant(1.0)), y.ge(constant(2.0))])
         .build();
 
     assert!(prob.is_dcp(), "hstack problem should be DCP");
@@ -670,7 +670,7 @@ fn test_weighted_sum() {
     // c @ x = 1*x1 + 2*x2 + 3*x3
     // optimal: x = [1, 1, 1], value = 6
     let prob = Problem::minimize(matmul(&c, &x))
-        .subject_to([x.geq(&constant(1.0))])
+        .subject_to([x.ge(constant(1.0))])
         .build();
 
     assert!(prob.is_dcp(), "weighted sum problem should be DCP");
@@ -691,7 +691,7 @@ fn test_transpose_in_constraint() {
 
     // minimize sum(x) s.t. x >= 1
     let prob = Problem::minimize(sum(&x))
-        .subject_to([x.geq(&constant(1.0))])
+        .subject_to([x.ge(constant(1.0))])
         .build();
 
     assert!(prob.is_dcp(), "transpose problem should be DCP");
@@ -746,7 +746,7 @@ fn test_affine_leq_convex_not_dcp() {
     // This becomes norm2(x) - sum(x) >= 0, which has convex LHS
     // DCP requires concave >= 0, not convex >= 0
     let prob = Problem::minimize(sum(&x))
-        .subject_to([sum(&x).leq(&norm2(&x))]) // affine <= convex is not DCP
+        .subject_to([sum(&x).le(norm2(&x))]) // affine <= convex is not DCP
         .build();
     assert!(!prob.is_dcp(), "affine <= convex should not be DCP");
 }
@@ -760,7 +760,7 @@ fn test_affine_leq_convex_not_dcp() {
 fn test_single_element() {
     let x = variable(1);
     let prob = Problem::minimize(sum(&x))
-        .subject_to([x.geq(&constant(5.0))])
+        .subject_to([x.ge(constant(5.0))])
         .build();
 
     let solution = prob.solve().expect("should solve");
@@ -774,7 +774,7 @@ fn test_constant_objective() {
     let x = variable(3);
     // Objective is just constant 1.0
     let prob = Problem::minimize(constant(1.0))
-        .subject_to([x.geq(&constant(0.0))])
+        .subject_to([x.ge(constant(0.0))])
         .build();
 
     let solution = prob.solve().expect("should solve");
@@ -790,8 +790,8 @@ fn test_tight_constraints() {
     // minimize sum(x) = 3
     let prob = Problem::minimize(sum(&x))
         .subject_to([
-            sum(&x).equals(&constant(3.0)),
-            (&x - &constant_vec(vec![0.0, 2.0])).equals(&constant_vec(vec![2.0, -1.0])),
+            sum(&x).eq(constant(3.0)),
+            (&x - &constant_vec(vec![0.0, 2.0])).eq(constant_vec(vec![2.0, -1.0])),
         ])
         .build();
 
@@ -810,7 +810,7 @@ fn test_scale_100_variables_lp() {
     let x = variable(100);
     // minimize sum(x) s.t. x >= 1
     let prob = Problem::minimize(sum(&x))
-        .subject_to([x.geq(&constant(1.0))])
+        .subject_to([x.ge(constant(1.0))])
         .build();
 
     let solution = prob.solve().expect("should solve 100-var LP");
@@ -828,7 +828,7 @@ fn test_scale_50_variables_socp() {
     // minimize ||x||_2 s.t. sum(x) = 50
     // optimal: x = [1, 1, ..., 1], ||x||_2 = sqrt(50)
     let prob = Problem::minimize(norm2(&x))
-        .subject_to([sum(&x).equals(&constant(50.0))])
+        .subject_to([sum(&x).eq(constant(50.0))])
         .build();
 
     let solution = prob.solve().expect("should solve 50-var SOCP");
@@ -847,7 +847,7 @@ fn test_scale_30_variables_qp() {
     // minimize ||x||_2^2 s.t. sum(x) = 30
     // optimal: x = [1, 1, ..., 1], ||x||^2 = 30
     let prob = Problem::minimize(sum_squares(&x))
-        .subject_to([sum(&x).equals(&constant(30.0))])
+        .subject_to([sum(&x).eq(constant(30.0))])
         .build();
 
     let solution = prob.solve().expect("should solve 30-var QP");
@@ -890,7 +890,7 @@ mod stress_tests {
         // df/dx1 = 4x1 - 2 = 0 => x1 = 0.5, x2 = 0.5
         // value = 2(0.25) + 2(0.5)(0.5) + 2(0.25) = 0.5 + 0.5 + 0.5 = 1.5
         let prob = Problem::minimize(quad_form(&x, &p))
-            .subject_to([sum(&x).equals(&constant(1.0))])
+            .subject_to([sum(&x).eq(constant(1.0))])
             .build();
 
         assert!(prob.is_dcp(), "quad_form with PSD should be DCP");
@@ -924,7 +924,7 @@ mod stress_tests {
         // value = (6/11)^2 + 2*(3/11)^2 + 3*(2/11)^2
         //       = 36/121 + 18/121 + 12/121 = 66/121 = 6/11
         let prob = Problem::minimize(quad_form(&x, &p))
-            .subject_to([sum(&x).equals(&constant(1.0))])
+            .subject_to([sum(&x).eq(constant(1.0))])
             .build();
 
         let solution = prob.solve().expect("should solve");
@@ -956,7 +956,7 @@ mod stress_tests {
 
         // minimize sum(y) s.t. x >= 1
         let prob = Problem::minimize(sum(&y))
-            .subject_to([x.geq(&constant(1.0))])
+            .subject_to([x.ge(constant(1.0))])
             .build();
 
         assert!(prob.is_dcp(), "nested matmul should be DCP");
@@ -997,7 +997,7 @@ mod stress_tests {
         // To minimize with sum(x)=1, x>=0: put all weight on x1
         // optimal: x = [1, 0, 0, 0], value = 3
         let prob = Problem::minimize(sum(&matmul(&a, &x)))
-            .subject_to([x.geq(&constant(0.0)), sum(&x).equals(&constant(1.0))])
+            .subject_to([x.ge(constant(0.0)), sum(&x).eq(constant(1.0))])
             .build();
 
         let solution = prob.solve().expect("should solve");
@@ -1024,7 +1024,7 @@ mod stress_tests {
         // sum = 5*x1 + 7*x2 + 9*x3
         // optimal: x = [1, 1, 1], value = 21
         let prob = Problem::minimize(sum(&matmul(&x, &a)))
-            .subject_to([x.geq(&constant(1.0))])
+            .subject_to([x.ge(constant(1.0))])
             .build();
 
         let solution = prob.solve().expect("should solve");
@@ -1050,9 +1050,9 @@ mod stress_tests {
         let obj = &sum(&x) + &(&constant(2.0) * &sum(&y)) + &(&constant(3.0) * &sum(&z));
         let prob = Problem::minimize(obj)
             .subject_to([
-                x.geq(&constant(1.0)),
-                y.geq(&constant(1.0)),
-                z.geq(&constant(1.0)),
+                x.ge(constant(1.0)),
+                y.ge(constant(1.0)),
+                z.ge(constant(1.0)),
             ])
             .build();
 
@@ -1074,9 +1074,9 @@ mod stress_tests {
         // optimal: x = [1, 1, 1], ||x|| = sqrt(3)
         let prob = Problem::minimize(norm2(&x))
             .subject_to([
-                sum(&x).geq(&constant(3.0)),
-                x.geq(&constant(0.0)),
-                x.leq(&constant(2.0)),
+                sum(&x).ge(constant(3.0)),
+                x.ge(constant(0.0)),
+                x.le(constant(2.0)),
             ])
             .build();
 
@@ -1097,9 +1097,9 @@ mod stress_tests {
         // This combines SOCP and LP constraints on same variable
         let prob = Problem::minimize(sum(&x))
             .subject_to([
-                norm2(&x).leq(&constant(2.0)),
-                sum(&x).geq(&constant(1.0)),
-                x.geq(&constant(0.0)),
+                norm2(&x).le(constant(2.0)),
+                sum(&x).ge(constant(1.0)),
+                x.ge(constant(0.0)),
             ])
             .build();
 
@@ -1125,8 +1125,8 @@ mod stress_tests {
         let stacked = vstack(vec![x.clone(), y.clone()]);
         let prob = Problem::minimize(norm2(&stacked))
             .subject_to([
-                sum(&x).equals(&constant(1.0)),
-                sum(&y).equals(&constant(1.0)),
+                sum(&x).eq(constant(1.0)),
+                sum(&y).eq(constant(1.0)),
             ])
             .build();
 
@@ -1148,7 +1148,7 @@ mod stress_tests {
         // minimize sum(x) + sum(y) s.t. vstack([x, y]) >= 1
         let stacked = vstack(vec![x.clone(), y.clone()]);
         let prob = Problem::minimize(&sum(&x) + &sum(&y))
-            .subject_to([stacked.geq(&constant(1.0))])
+            .subject_to([stacked.ge(constant(1.0))])
             .build();
 
         let solution = prob.solve().expect("should solve");
@@ -1172,7 +1172,7 @@ mod stress_tests {
 
         // minimize 1e-6 * sum(x) s.t. x >= 1
         let prob = Problem::minimize(&small * &sum(&x))
-            .subject_to([x.geq(&constant(1.0))])
+            .subject_to([x.ge(constant(1.0))])
             .build();
 
         let solution = prob.solve().expect("should solve");
@@ -1191,7 +1191,7 @@ mod stress_tests {
 
         // minimize 1e6 * sum(x) s.t. x >= 1
         let prob = Problem::minimize(&large * &sum(&x))
-            .subject_to([x.geq(&constant(1.0))])
+            .subject_to([x.ge(constant(1.0))])
             .build();
 
         let solution = prob.solve().expect("should solve");
@@ -1210,8 +1210,8 @@ mod stress_tests {
         // x1 + x2 = 1
         // x1 + 1.0001*x2 = 1.0001
         // These are nearly parallel - tests numerical stability
-        let c1 = sum(&x).equals(&constant(1.0));
-        let c2 = (&x + &constant_vec(vec![0.0, 0.0001])).equals(&constant_vec(vec![0.5, 0.5001]));
+        let c1 = sum(&x).eq(constant(1.0));
+        let c2 = (&x + &constant_vec(vec![0.0, 0.0001])).eq(constant_vec(vec![0.5, 0.5001]));
 
         let prob = Problem::minimize(sum(&x))
             .subject_to([c1, c2])
@@ -1247,9 +1247,9 @@ mod stress_tests {
 
         let prob = Problem::minimize(sum(&x))
             .subject_to([
-                matmul(&constant_dmatrix(c01), &x).equals(&constant(2.0)),
-                matmul(&constant_dmatrix(c23), &x).geq(&constant(1.0)),
-                x.geq(&constant(0.0)),
+                matmul(&constant_dmatrix(c01), &x).eq(constant(2.0)),
+                matmul(&constant_dmatrix(c23), &x).ge(constant(1.0)),
+                x.ge(constant(0.0)),
             ])
             .build();
 
@@ -1275,10 +1275,10 @@ mod stress_tests {
         // sum(y) >= 0.5
         let prob = Problem::minimize(&sum(&x) + &sum(&y))
             .subject_to([
-                norm2(&x).leq(&constant(1.0)),
-                norm2(&y).leq(&constant(1.0)),
-                sum(&x).geq(&constant(0.5)),
-                sum(&y).geq(&constant(0.5)),
+                norm2(&x).le(constant(1.0)),
+                norm2(&y).le(constant(1.0)),
+                sum(&x).ge(constant(0.5)),
+                sum(&y).ge(constant(0.5)),
             ])
             .build();
 
@@ -1305,7 +1305,7 @@ mod stress_tests {
 
         let x = variable(3);
         let prob = Problem::minimize(sum(&x))
-            .subject_to([x.geq(&constant_sparse(sparse))])
+            .subject_to([x.ge(constant_sparse(sparse))])
             .build();
 
         let solution = prob.solve().expect("should solve");
@@ -1335,7 +1335,7 @@ mod stress_tests {
         // A @ x = [2*x1, 3*x2, 4*x3]
         // sum = 2 + 3 + 4 = 9
         let prob = Problem::minimize(sum(&matmul(&a, &x)))
-            .subject_to([x.geq(&constant(1.0))])
+            .subject_to([x.ge(constant(1.0))])
             .build();
 
         let solution = prob.solve().expect("should solve");
@@ -1354,7 +1354,7 @@ mod stress_tests {
     fn test_scale_200_lp() {
         let x = variable(200);
         let prob = Problem::minimize(sum(&x))
-            .subject_to([x.geq(&constant(1.0))])
+            .subject_to([x.ge(constant(1.0))])
             .build();
 
         let solution = prob.solve().expect("should solve 200-var LP");
@@ -1371,8 +1371,8 @@ mod stress_tests {
         // minimize ||x||_2 s.t. sum(x) = 100, x >= 0
         let prob = Problem::minimize(norm2(&x))
             .subject_to([
-                sum(&x).equals(&constant(100.0)),
-                x.geq(&constant(0.0)),
+                sum(&x).eq(constant(100.0)),
+                x.ge(constant(0.0)),
             ])
             .build();
 
@@ -1392,7 +1392,7 @@ mod stress_tests {
 
         // minimize ||x||^2 s.t. sum(x) = 50
         let prob = Problem::minimize(sum_squares(&x))
-            .subject_to([sum(&x).equals(&constant(50.0))])
+            .subject_to([sum(&x).eq(constant(50.0))])
             .build();
 
         let solution = prob.solve().expect("should solve");
@@ -1424,7 +1424,7 @@ mod stress_tests {
         // sum(e4) = 2*sum(x) + 4.5
         // optimal: x = [0,0,0], value = 4.5
         let prob = Problem::minimize(sum(&e4))
-            .subject_to([x.geq(&constant(0.0))])
+            .subject_to([x.ge(constant(0.0))])
             .build();
 
         let solution = prob.solve().expect("should solve");
@@ -1444,7 +1444,7 @@ mod stress_tests {
         // = 2 * sum(x)
         // optimal: x = [1,1,1], value = 6
         let prob = Problem::minimize(&y + &y)
-            .subject_to([x.geq(&constant(1.0))])
+            .subject_to([x.ge(constant(1.0))])
             .build();
 
         let solution = prob.solve().expect("should solve");
@@ -1453,4 +1453,131 @@ mod stress_tests {
         let rel_err = (value - expected).abs() / (1.0 + expected.abs());
         assert!(rel_err < STRESS_TOL, "expr reuse: expected {}, got {}", expected, value);
     }
+}
+
+#[test]
+fn test_variable_product_not_dcp() {
+    // x * y is not DCP (quadratic/bilinear)
+    let x = variable(1);
+    let y = variable(1);
+    let prod = &x * &y;
+    
+    // Check curvature is Unknown
+    assert_eq!(prod.curvature(), cvxrust::dcp::Curvature::Unknown);
+    
+    // Problem should be not DCP
+    let prob = Problem::minimize(prod).build();
+    assert!(!prob.is_dcp());
+    
+    // Solve should return NotDcp error
+    let result = prob.solve();
+    assert!(result.is_err());
+    if let Err(e) = result {
+        let msg = format!("{}", e);
+        assert!(msg.contains("not DCP") || msg.contains("NotDcp"), "Expected NotDcp error, got: {}", msg);
+    }
+}
+
+#[test]
+fn test_variable_matmul_not_dcp() {
+    // x @ y is not DCP
+    let x = variable(3);
+    let y = variable(3);
+    let prod = matmul(&x, &transpose(&y));
+
+    // Check curvature is Unknown
+    assert_eq!(prod.curvature(), cvxrust::dcp::Curvature::Unknown);
+
+    // Problem should be not DCP
+    let prob = Problem::minimize(sum(&prod)).build();
+    assert!(!prob.is_dcp());
+}
+
+#[test]
+fn test_index_slice_in_constraint() {
+    // Test that index/slice operations work correctly in optimization
+    // minimize sum(x) s.t. x[0:3] >= 1, x[3:5] >= 2
+    // optimal: x = [1, 1, 1, 2, 2], value = 7
+    use cvxrust::atoms::slice;
+
+    let x = variable(5);
+    let x_first = slice(&x, 0, 3);  // x[0:3]
+    let x_last = slice(&x, 3, 5);   // x[3:5]
+
+    let prob = Problem::minimize(sum(&x))
+        .subject_to([x_first.ge(1.0), x_last.ge(2.0)])
+        .build();
+
+    assert!(prob.is_dcp());
+
+    let solution = prob.solve().unwrap();
+    assert_eq!(solution.status, SolveStatus::Optimal);
+
+    // Check optimal value
+    let val = solution.value.unwrap();
+    assert!((val - 7.0).abs() < TOL, "Expected 7.0, got {}", val);
+
+    // Check solution values
+    let x_vals = &solution[&x];
+    for i in 0..3 {
+        assert!((x_vals[(i, 0)] - 1.0).abs() < TOL, "x[{}] should be ~1.0", i);
+    }
+    for i in 3..5 {
+        assert!((x_vals[(i, 0)] - 2.0).abs() < TOL, "x[{}] should be ~2.0", i);
+    }
+}
+
+#[test]
+fn test_index_single_element() {
+    // Test single element indexing
+    // minimize x[0] s.t. x >= 0, sum(x) == 5
+    // optimal: x = [0, 5, 0, ...], value = 0 (put all in other elements)
+    use cvxrust::atoms::index;
+
+    let x = variable(3);
+    let x0 = index(&x, 0);  // x[0]
+
+    let prob = Problem::minimize(x0)
+        .subject_to([x.ge(0.0), sum(&x).eq(5.0)])
+        .build();
+
+    assert!(prob.is_dcp());
+
+    let solution = prob.solve().unwrap();
+    assert_eq!(solution.status, SolveStatus::Optimal);
+
+    // x[0] should be 0, other elements should sum to 5
+    let x_vals = &solution[&x];
+    assert!(x_vals[(0, 0)].abs() < TOL, "x[0] should be ~0");
+    assert!((x_vals[(1, 0)] + x_vals[(2, 0)] - 5.0).abs() < TOL);
+}
+
+#[test]
+fn test_transpose_in_matmul() {
+    // Test that transpose works correctly with matmul
+    // minimize ||A @ x - b||_2 where A is 3x2, x is 2x1, b is 3x1
+    // This is equivalent to minimize ||A @ x - b||_2
+    // Also test: A.T @ A @ x should work
+    let x = VariableBuilder::new(Shape::vector(2)).build();
+
+    // A = [[1, 2], [3, 4], [5, 6]] (3x2 matrix, column-major)
+    let a = constant_matrix(vec![1.0, 3.0, 5.0, 2.0, 4.0, 6.0], 3, 2);
+    // b = [1, 2, 3]
+    let b = constant_vec(vec![1.0, 2.0, 3.0]);
+
+    // Least squares: minimize ||Ax - b||_2^2
+    let residual = &matmul(&a, &x) - &b;
+    let obj = sum_squares(&residual);
+
+    let prob = Problem::minimize(obj).build();
+    assert!(prob.is_dcp());
+
+    let solution = prob.solve().unwrap();
+    assert_eq!(solution.status, SolveStatus::Optimal);
+
+    // Verify A.T @ A @ x gives correct shape
+    let at = transpose(&a);
+    let ata = matmul(&at, &a);  // Should be 2x2
+    let atax = matmul(&ata, &x);  // Should be 2x1
+    assert_eq!(atax.shape(), Shape::vector(2));
 }
