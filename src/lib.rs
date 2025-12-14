@@ -1,0 +1,111 @@
+//! # cvxrust
+//!
+//! A Rust implementation of Disciplined Convex Programming (DCP).
+//!
+//! cvxrust provides a domain-specific language for specifying convex optimization
+//! problems in Rust, with automatic verification of convexity rules and efficient
+//! solving via the Clarabel solver.
+//!
+//! ## Quick Start
+//!
+//! ```ignore
+//! use cvxrust::prelude::*;
+//!
+//! // Create variables
+//! let x = variable(5);
+//!
+//! // Build and solve a least-squares problem
+//! let a = constant_dmatrix(/* your matrix */);
+//! let b = constant_vec(/* your vector */);
+//!
+//! let solution = Problem::minimize(sum_squares(&(&a.matmul(&x) - &b)))
+//!     .subject_to([x.geq(&constant(0.0))])
+//!     .solve()?;
+//!
+//! println!("Optimal value: {}", solution.value.unwrap());
+//! ```
+//!
+//! ## DCP Rules
+//!
+//! cvxrust enforces Disciplined Convex Programming rules:
+//!
+//! - **Minimization** requires a **convex** objective
+//! - **Maximization** requires a **concave** objective
+//! - **Equality constraints** require **affine** expressions
+//! - **Inequality constraints** (>=) require **concave** left-hand side
+//!
+//! ## Supported Atoms
+//!
+//! ### Affine (both convex and concave)
+//! - Arithmetic: `+`, `-`, `*` (by scalar), `/` (by scalar)
+//! - Aggregation: `sum`, `trace`
+//! - Structural: `reshape`, `transpose`, `vstack`, `hstack`
+//! - Linear algebra: `matmul`, `dot`
+//!
+//! ### Convex
+//! - Norms: `norm1`, `norm2`, `norm_inf`
+//! - Element-wise: `abs`, `pos`, `neg_part`
+//! - Aggregation: `maximum`, `sum_squares`
+//! - Quadratic: `quad_form` (with PSD matrix), `quad_over_lin`
+//!
+//! ### Concave
+//! - Aggregation: `minimum`
+//! - Quadratic: `quad_form` (with NSD matrix)
+//!
+//! ## Architecture
+//!
+//! - **Expression trees** built using the `Expr` enum with `Arc` sharing
+//! - **DCP verification** via curvature and sign tracking
+//! - **Canonicalization** transforms to affine + cone constraints
+//! - **Native QP** for quadratic objectives (not SOCP reformulation)
+//! - **Clarabel solver** for LP, QP, and SOCP problems
+
+pub mod atoms;
+pub mod canon;
+pub mod constraints;
+pub mod dcp;
+pub mod error;
+pub mod expr;
+pub mod problem;
+pub mod solver;
+pub mod sparse;
+
+/// Prelude module for convenient imports.
+///
+/// ```ignore
+/// use cvxrust::prelude::*;
+/// ```
+pub mod prelude {
+    // Expression types
+    pub use crate::expr::{
+        constant, constant_dmatrix, constant_matrix, constant_sparse, constant_vec, eye, ones,
+        variable, zeros, Array, Expr, ExprId, IntoConstant, Shape, VariableBuilder, VariableExt,
+    };
+
+    // Atoms
+    pub use crate::atoms::{
+        abs, dot, flatten, hstack, matmul, max2, maximum, min2, minimum, neg_part, norm, norm1,
+        norm2, norm_inf, pos, quad_form, quad_over_lin, reshape, sum, sum_axis, sum_squares, trace,
+        transpose, vstack,
+    };
+
+    // Constraints
+    pub use crate::constraints::{Constraint, ConstraintExt};
+
+    // DCP
+    pub use crate::dcp::{Curvature, Sign};
+
+    // Problem
+    pub use crate::problem::{Objective, Problem, ProblemBuilder};
+
+    // Solver
+    pub use crate::solver::{Settings, Solution, SolveStatus};
+
+    // Errors
+    pub use crate::error::{CvxError, Result};
+}
+
+// Re-export main types at crate root
+pub use error::{CvxError, Result};
+pub use problem::Problem;
+pub use solver::{Solution, SolveStatus};
