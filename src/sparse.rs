@@ -92,40 +92,9 @@ pub fn csc_vstack(a: &CscMatrix<f64>, b: &CscMatrix<f64>) -> CscMatrix<f64> {
 }
 
 /// Add two CSC matrices.
+/// Uses nalgebra_sparse's built-in addition which is more efficient.
 pub fn csc_add(a: &CscMatrix<f64>, b: &CscMatrix<f64>) -> CscMatrix<f64> {
-    let mut triplets: Vec<(usize, usize, f64)> = Vec::new();
-
-    for (r, c, v) in a.triplet_iter() {
-        triplets.push((r, c, *v));
-    }
-    for (r, c, v) in b.triplet_iter() {
-        triplets.push((r, c, *v));
-    }
-
-    // Sort and combine duplicates
-    triplets.sort_by_key(|(r, c, _)| (*r, *c));
-    let mut combined: Vec<(usize, usize, f64)> = Vec::new();
-    for (r, c, v) in triplets {
-        if let Some((lr, lc, lv)) = combined.last_mut() {
-            if *lr == r && *lc == c {
-                *lv += v;
-                continue;
-            }
-        }
-        combined.push((r, c, v));
-    }
-
-    let (rows, cols, vals): (Vec<_>, Vec<_>, Vec<_>) = combined
-        .into_iter()
-        .map(|(r, c, v)| (r, c, v))
-        .fold((vec![], vec![], vec![]), |(mut rs, mut cs, mut vs), (r, c, v)| {
-            rs.push(r);
-            cs.push(c);
-            vs.push(v);
-            (rs, cs, vs)
-        });
-
-    csc_from_triplets(a.nrows(), a.ncols(), rows, cols, vals)
+    a + b
 }
 
 /// Negate a CSC matrix.
@@ -144,6 +113,15 @@ pub fn csc_scale(a: &CscMatrix<f64>, scalar: f64) -> CscMatrix<f64> {
     let row_indices: Vec<usize> = a.row_indices().to_vec();
     CscMatrix::try_from_csc_data(a.nrows(), a.ncols(), col_offsets, row_indices, values)
         .unwrap_or_else(|_| CscMatrix::zeros(a.nrows(), a.ncols()))
+}
+
+/// Multiply sparse matrix by dense matrix on the right: A_sparse @ B_dense
+pub fn sparse_dense_matmul(a: &CscMatrix<f64>, b: &DMatrix<f64>) -> CscMatrix<f64> {
+    // Convert sparse to dense, multiply, convert back
+    // This is not optimal but correct
+    let a_dense = csc_to_dense(a);
+    let result = &a_dense * b;
+    dense_to_csc(&result)
 }
 
 /// Repeat rows of a CSC matrix.
@@ -186,5 +164,17 @@ mod tests {
         let dense = DMatrix::identity(3, 3);
         let sparse = dense_to_csc(&dense);
         assert_eq!(sparse.nrows(), 3);
+    }
+
+    #[test]
+    fn test_csc_add() {
+        let a = CscMatrix::<f64>::identity(3);
+        let b = CscMatrix::<f64>::identity(3);
+        let c = csc_add(&a, &b);
+        // Identity + Identity = 2*Identity, so diagonal values should be 2.0
+        assert_eq!(c.values().len(), 3);
+        for v in c.values() {
+            assert!((v - 2.0).abs() < 1e-10);
+        }
     }
 }

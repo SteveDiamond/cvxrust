@@ -9,7 +9,7 @@ use nalgebra_sparse::CscMatrix;
 
 use crate::canon::{ConeConstraint, LinExpr, QuadExpr};
 use crate::expr::{ExprId, Shape};
-use crate::sparse::csc_from_triplets;
+use crate::sparse::{csc_from_triplets, csc_scale};
 
 /// Cone dimensions for Clarabel.
 #[derive(Debug, Clone, Default)]
@@ -154,7 +154,11 @@ fn stuff_objective(objective: &QuadExpr, var_map: &VariableMap) -> (CscMatrix<f6
 
     let p = csc_from_triplets(n, n, p_rows, p_cols, p_vals);
 
-    (p, q)
+    // Clarabel uses objective (1/2) x' P x + q' x, so we scale P by 2
+    // to get our intended objective x' P x + q' x
+    let p_scaled = csc_scale(&p, 2.0);
+
+    (p_scaled, q)
 }
 
 /// Stuff constraints into A, b, and cone dims.

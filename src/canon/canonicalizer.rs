@@ -12,7 +12,7 @@ use nalgebra_sparse::CscMatrix;
 
 use super::lin_expr::{LinExpr, QuadExpr};
 use crate::expr::{Array, Expr, ExprId, Shape, VariableBuilder};
-use crate::sparse::{csc_vstack, csc_repeat_rows, dense_to_csc, csc_to_dense, csc_scale};
+use crate::sparse::{csc_vstack, csc_repeat_rows, dense_to_csc, csc_to_dense, csc_scale, sparse_dense_matmul};
 
 /// A cone constraint in standard form: Ax + b in K.
 #[derive(Debug, Clone)]
@@ -184,10 +184,9 @@ impl CanonContext {
         match arr {
             Array::Scalar(v) => LinExpr::scalar(*v),
             Array::Dense(m) => LinExpr::constant(m.clone()),
-            Array::Sparse(_) => {
-                // Convert to dense for simplicity
-                // In production, would want to keep sparse
-                LinExpr::zeros(arr.shape())
+            Array::Sparse(s) => {
+                // Convert sparse to dense
+                LinExpr::constant(csc_to_dense(s))
             }
         }
     }
@@ -240,7 +239,7 @@ impl CanonContext {
         let a_mat = match a {
             Array::Dense(m) => m.clone(),
             Array::Scalar(v) => DMatrix::from_element(1, 1, *v),
-            Array::Sparse(_) => return b.clone(), // Simplified
+            Array::Sparse(s) => csc_to_dense(s),
         };
 
         let mut new_coeffs = std::collections::HashMap::new();
@@ -260,10 +259,29 @@ impl CanonContext {
         }
     }
 
-    fn lin_matmul_const(&self, a: &LinExpr, _b: &Array) -> LinExpr {
-        // Similar to above but for right multiplication
-        // Simplified implementation
-        a.clone()
+    fn lin_matmul_const(&self, a: &LinExpr, b: &Array) -> LinExpr {
+        // (sum_i A_i x_i + c) @ B = sum_i (A_i @ B) x_i + c @ B
+        let b_mat = match b {
+            Array::Dense(m) => m.clone(),
+            Array::Scalar(v) => DMatrix::from_element(1, 1, *v),
+            Array::Sparse(s) => csc_to_dense(s),
+        };
+
+        let mut new_coeffs = std::collections::HashMap::new();
+        for (var_id, coeff) in &a.coeffs {
+            // A_i @ B
+            let new_coeff = sparse_dense_matmul(coeff, &b_mat);
+            new_coeffs.insert(*var_id, new_coeff);
+        }
+
+        let new_const = &a.constant * &b_mat;
+        let shape = Shape::matrix(new_const.nrows(), new_const.ncols());
+
+        LinExpr {
+            coeffs: new_coeffs,
+            constant: new_const,
+            shape,
+        }
     }
 
     fn canonicalize_sum(&mut self, a: &Expr, _axis: Option<usize>) -> CanonExpr {
@@ -548,14 +566,13 @@ impl CanonContext {
     fn canonicalize_sum_squares_lin(&mut self, x: &LinExpr, for_objective: bool) -> CanonExpr {
         if for_objective {
             // For objective, use native QP: ||x||^2 = x' I x
-            // Clarabel objective is (1/2) x' P x, so P = 2I to get x' I x
+            // The (1/2) factor for Clarabel is handled in stuffing.rs
             let vars = x.variables();
             if vars.len() == 1 && x.constant.iter().all(|&v| v == 0.0) {
                 let var_id = vars[0];
                 let size = x.size();
-                // Use 2*I since Clarabel uses (1/2) x' P x form
-                let two_identity = csc_scale(&CscMatrix::identity(size), 2.0);
-                return CanonExpr::Quadratic(QuadExpr::quadratic(var_id, two_identity));
+                let identity = CscMatrix::identity(size);
+                return CanonExpr::Quadratic(QuadExpr::quadratic(var_id, identity));
             }
         }
 
@@ -644,6 +661,9 @@ impl CanonContext {
 
 fn dense_sparse_matmul(dense: &DMatrix<f64>, sparse: &CscMatrix<f64>) -> CscMatrix<f64> {
     // Dense @ Sparse multiplication
+    // Note: nalgebra_sparse doesn't support dense @ sparse directly.
+    // A more efficient implementation would iterate through sparse columns.
+    // For medium-scale problems (100-10k variables), this is acceptable.
     let result = dense * csc_to_dense(sparse);
     dense_to_csc(&result)
 }

@@ -84,13 +84,23 @@ impl LinExpr {
 
     /// Add two linear expressions.
     pub fn add(&self, other: &LinExpr) -> LinExpr {
-        let mut coeffs = self.coeffs.clone();
-        for (var_id, coeff) in &other.coeffs {
+        // Optimization: if self has no coefficients, just clone other's
+        let coeffs = if self.coeffs.is_empty() {
+            other.coeffs.clone()
+        } else if other.coeffs.is_empty() {
+            self.coeffs.clone()
+        } else {
+            // Both have coefficients - clone the larger one and merge smaller into it
+            let mut coeffs = self.coeffs.clone();
+            coeffs.reserve(other.coeffs.len());
+            for (var_id, coeff) in &other.coeffs {
+                coeffs
+                    .entry(*var_id)
+                    .and_modify(|c| *c = csc_add(c, coeff))
+                    .or_insert_with(|| coeff.clone());
+            }
             coeffs
-                .entry(*var_id)
-                .and_modify(|c| *c = csc_add(c, coeff))
-                .or_insert_with(|| coeff.clone());
-        }
+        };
 
         // Handle broadcasting for constants
         let new_constant = if self.constant.nrows() == other.constant.nrows()

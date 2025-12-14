@@ -414,6 +414,136 @@ fn test_unbounded() {
 }
 
 // ============================================================================
+// Bug regression tests - these demonstrate known bugs
+// ============================================================================
+
+/// BUG #1: Sparse constants silently become zeros
+/// The canonicalizer at canonicalizer.rs:187-191 returns LinExpr::zeros() for sparse constants
+/// instead of properly converting them.
+#[test]
+fn test_bug_sparse_constant_becomes_zero() {
+    use nalgebra_sparse::{CooMatrix, CscMatrix};
+
+    // Create a simple sparse matrix with non-zero values
+    // This is a 3x1 column vector with values [1.0, 2.0, 3.0] stored as sparse
+    let mut coo = CooMatrix::new(3, 1);
+    coo.push(0, 0, 1.0);
+    coo.push(1, 0, 2.0);
+    coo.push(2, 0, 3.0);
+    let sparse_vec: CscMatrix<f64> = CscMatrix::from(&coo);
+
+    let sparse_const = constant_sparse(sparse_vec);
+    let x = variable(3);
+
+    // minimize sum(x) s.t. x >= sparse_const
+    // With sparse_const = [1, 2, 3], optimal x = [1, 2, 3], value = 6
+    // BUG: sparse_const becomes [0, 0, 0], so optimal x = [0, 0, 0], value = 0
+    let prob = Problem::minimize(sum(&x))
+        .subject_to([x.geq(&sparse_const)])
+        .build();
+
+    assert!(prob.is_dcp(), "Problem should be DCP");
+
+    let solution = prob.solve().expect("Should solve");
+    assert_eq!(solution.status, SolveStatus::Optimal);
+
+    let value = solution.value.expect("Should have value");
+    let expected = 6.0;  // sum([1, 2, 3])
+    let rel_err = (value - expected).abs() / (1.0 + expected.abs());
+
+    // This test will FAIL until the bug is fixed
+    // Currently value ≈ 0 because sparse constant becomes zeros
+    assert!(
+        rel_err < TOL,
+        "BUG: Sparse constant became zeros! Expected {}, got {} (rel_err={})",
+        expected, value, rel_err
+    );
+}
+
+/// BUG #2: Right matrix multiplication x @ A doesn't actually multiply
+/// The canonicalizer at canonicalizer.rs:263-266 just returns a.clone() without multiplying.
+#[test]
+fn test_bug_right_matmul_broken() {
+    use nalgebra::DMatrix;
+
+    // Create a 2x2 matrix A = [[2, 0], [0, 3]]
+    let a_matrix = DMatrix::from_vec(2, 2, vec![2.0, 0.0, 0.0, 3.0]);
+    let a = constant_dmatrix(a_matrix);
+
+    // x is a 1x2 row vector
+    let x = variable((1, 2));
+
+    // y = x @ A should be [2*x[0], 3*x[1]] (row vector multiplied by matrix)
+    // minimize sum(y) s.t. x >= 1
+    // With x @ A working: optimal x = [1, 1], y = [2, 3], value = 5
+    // BUG: x @ A returns x unchanged, so y = x, value = 2
+    let y = matmul(&x, &a);
+    let prob = Problem::minimize(sum(&y))
+        .subject_to([x.geq(&constant(1.0))])
+        .build();
+
+    assert!(prob.is_dcp(), "Problem should be DCP");
+
+    let solution = prob.solve().expect("Should solve");
+    assert_eq!(solution.status, SolveStatus::Optimal);
+
+    let value = solution.value.expect("Should have value");
+    let expected = 5.0;  // 2 + 3
+    let rel_err = (value - expected).abs() / (1.0 + expected.abs());
+
+    // This test will FAIL until the bug is fixed
+    // Currently value ≈ 2 because x @ A returns x unchanged
+    assert!(
+        rel_err < TOL,
+        "BUG: Right matmul x @ A didn't multiply! Expected {}, got {} (rel_err={})",
+        expected, value, rel_err
+    );
+}
+
+/// BUG #3: Left matmul with sparse constant matrix doesn't multiply
+/// The canonicalizer at canonicalizer.rs:243 returns b.clone() for sparse A in A @ x
+#[test]
+fn test_bug_left_matmul_sparse_broken() {
+    use nalgebra_sparse::{CooMatrix, CscMatrix};
+
+    // Create a 2x2 sparse matrix A = [[2, 0], [0, 3]]
+    let mut coo = CooMatrix::new(2, 2);
+    coo.push(0, 0, 2.0);
+    coo.push(1, 1, 3.0);
+    let a_sparse: CscMatrix<f64> = CscMatrix::from(&coo);
+    let a = constant_sparse(a_sparse);
+
+    // x is a 2x1 column vector
+    let x = variable(2);
+
+    // y = A @ x should be [2*x[0], 3*x[1]]
+    // minimize sum(y) s.t. x >= 1
+    // With A @ x working: optimal x = [1, 1], y = [2, 3], value = 5
+    // BUG: A @ x returns x unchanged (for sparse A), so y = x, value = 2
+    let y = matmul(&a, &x);
+    let prob = Problem::minimize(sum(&y))
+        .subject_to([x.geq(&constant(1.0))])
+        .build();
+
+    assert!(prob.is_dcp(), "Problem should be DCP");
+
+    let solution = prob.solve().expect("Should solve");
+    assert_eq!(solution.status, SolveStatus::Optimal);
+
+    let value = solution.value.expect("Should have value");
+    let expected = 5.0;  // 2 + 3
+    let rel_err = (value - expected).abs() / (1.0 + expected.abs());
+
+    // This test will FAIL until the bug is fixed
+    // Currently value ≈ 2 because sparse A @ x returns x unchanged
+    assert!(
+        rel_err < TOL,
+        "BUG: Left matmul with sparse A @ x didn't multiply! Expected {}, got {} (rel_err={})",
+        expected, value, rel_err
+    );
+}
+
+// ============================================================================
 // Primal value verification tests
 // ============================================================================
 
@@ -447,4 +577,284 @@ fn test_primal_values() {
         }
         _ => panic!("expected dense array"),
     }
+}
+
+// ============================================================================
+// Tests for previously untested atoms
+// ============================================================================
+
+/// Test neg_part: max(-x, 0)
+#[test]
+fn test_neg_part() {
+    let x = variable(3);
+    // minimize sum(neg_part(x)) s.t. sum(x) = 0
+    // neg_part(x) = max(-x, 0), so positive x contributes 0, negative x contributes |x|
+    // With sum(x) = 0 and minimizing sum(neg_part(x)), optimal is x = [0, 0, 0], value = 0
+    let prob = Problem::minimize(sum(&neg_part(&x)))
+        .subject_to([sum(&x).equals(&constant(0.0))])
+        .build();
+
+    assert!(prob.is_dcp(), "neg_part problem should be DCP");
+    let solution = prob.solve().expect("should solve");
+    assert_eq!(solution.status, SolveStatus::Optimal);
+
+    let value = solution.value.expect("should have value");
+    assert!(value.abs() < TOL, "neg_part optimal should be 0, got {}", value);
+}
+
+/// Test quad_form: x'Px with PSD P
+#[test]
+fn test_quad_form_psd() {
+    use nalgebra::DMatrix;
+
+    // P = [[2, 0], [0, 3]] is PSD
+    let p_mat = DMatrix::from_vec(2, 2, vec![2.0, 0.0, 0.0, 3.0]);
+    let p = constant_dmatrix(p_mat);
+    let x = variable(2);
+
+    // minimize x'Px s.t. sum(x) = 1
+    // With P diagonal, this minimizes 2*x1^2 + 3*x2^2 s.t. x1 + x2 = 1
+    // Lagrangian: L = 2x1^2 + 3x2^2 + λ(x1 + x2 - 1)
+    // ∂L/∂x1 = 4x1 + λ = 0, ∂L/∂x2 = 6x2 + λ = 0
+    // x1 = -λ/4, x2 = -λ/6, x1 + x2 = 1 → -λ(1/4 + 1/6) = 1 → λ = -12/5
+    // x1 = 3/5 = 0.6, x2 = 2/5 = 0.4
+    // value = 2*(0.6)^2 + 3*(0.4)^2 = 2*0.36 + 3*0.16 = 0.72 + 0.48 = 1.2
+    let prob = Problem::minimize(quad_form(&x, &p))
+        .subject_to([sum(&x).equals(&constant(1.0))])
+        .build();
+
+    assert!(prob.is_dcp(), "quad_form(x, PSD) should be DCP for minimize");
+    let solution = prob.solve().expect("should solve");
+    assert_eq!(solution.status, SolveStatus::Optimal);
+
+    let value = solution.value.expect("should have value");
+    let expected = 1.2;
+    let rel_err = (value - expected).abs() / (1.0 + expected.abs());
+    assert!(rel_err < TOL, "quad_form expected {}, got {} (rel_err={})", expected, value, rel_err);
+}
+
+/// Test hstack: horizontal concatenation
+#[test]
+fn test_hstack() {
+    let x = variable(3);
+    let y = variable(3);
+
+    // hstack([x, y]) creates a 3x2 matrix
+    // minimize sum(hstack) s.t. x >= 1, y >= 2
+    let h = hstack(vec![x.clone(), y.clone()]);
+    let prob = Problem::minimize(sum(&h))
+        .subject_to([x.geq(&constant(1.0)), y.geq(&constant(2.0))])
+        .build();
+
+    assert!(prob.is_dcp(), "hstack problem should be DCP");
+    let solution = prob.solve().expect("should solve");
+    assert_eq!(solution.status, SolveStatus::Optimal);
+
+    let value = solution.value.expect("should have value");
+    let expected = 3.0 * 1.0 + 3.0 * 2.0; // 9.0
+    let rel_err = (value - expected).abs() / (1.0 + expected.abs());
+    assert!(rel_err < TOL, "hstack expected {}, got {} (rel_err={})", expected, value, rel_err);
+}
+
+/// Test weighted sum (equivalent to dot product)
+#[test]
+fn test_weighted_sum() {
+    use nalgebra::DMatrix;
+
+    let x = variable(3);
+    // c = [1, 2, 3] as a row vector for matmul: c @ x
+    let c_mat = DMatrix::from_vec(1, 3, vec![1.0, 2.0, 3.0]);
+    let c = constant_dmatrix(c_mat);
+
+    // minimize c @ x s.t. x >= 1
+    // c @ x = 1*x1 + 2*x2 + 3*x3
+    // optimal: x = [1, 1, 1], value = 6
+    let prob = Problem::minimize(matmul(&c, &x))
+        .subject_to([x.geq(&constant(1.0))])
+        .build();
+
+    assert!(prob.is_dcp(), "weighted sum problem should be DCP");
+    let solution = prob.solve().expect("should solve");
+    assert_eq!(solution.status, SolveStatus::Optimal);
+
+    let value = solution.value.expect("should have value");
+    let expected = 6.0;
+    let rel_err = (value - expected).abs() / (1.0 + expected.abs());
+    assert!(rel_err < TOL, "weighted sum expected {}, got {} (rel_err={})", expected, value, rel_err);
+}
+
+/// Test transpose in optimization
+#[test]
+fn test_transpose_in_constraint() {
+    let x = variable((2, 3)); // 2x3 matrix
+    let xt = transpose(&x);   // 3x2 matrix
+
+    // minimize sum(x) s.t. x >= 1
+    let prob = Problem::minimize(sum(&x))
+        .subject_to([x.geq(&constant(1.0))])
+        .build();
+
+    assert!(prob.is_dcp(), "transpose problem should be DCP");
+    let solution = prob.solve().expect("should solve");
+    assert_eq!(solution.status, SolveStatus::Optimal);
+
+    let value = solution.value.expect("should have value");
+    let expected = 6.0; // 2*3 = 6 elements, each = 1
+    let rel_err = (value - expected).abs() / (1.0 + expected.abs());
+    assert!(rel_err < TOL, "expected {}, got {}", expected, value);
+}
+
+// ============================================================================
+// DCP violation tests
+// ============================================================================
+
+/// Test that minimizing concave functions is not DCP
+#[test]
+fn test_minimize_concave_not_dcp() {
+    let x = variable(3);
+    // minimum is concave
+    let prob = Problem::minimize(min2(&x, &constant(0.0))).build();
+    assert!(!prob.is_dcp(), "minimize(concave) should not be DCP");
+}
+
+/// Test that maximizing convex functions is not DCP
+#[test]
+fn test_maximize_convex_not_dcp() {
+    let x = variable(3);
+    // norm2 is convex
+    let prob = Problem::maximize(norm2(&x)).build();
+    assert!(!prob.is_dcp(), "maximize(convex) should not be DCP");
+}
+
+/// Test that norm(convex) is not DCP (composition rule violation)
+#[test]
+fn test_composition_violation() {
+    let x = variable(3);
+    // norm(norm(x)) - norm is not monotone, so norm(convex) is unknown
+    let inner = norm2(&x);
+    let outer = norm2(&inner);
+    let prob = Problem::minimize(outer).build();
+    // This should be unknown curvature, hence not DCP
+    assert!(!prob.is_dcp(), "norm(norm(x)) should not be DCP");
+}
+
+/// Test affine <= convex constraint is not DCP
+#[test]
+fn test_affine_leq_convex_not_dcp() {
+    let x = variable(3);
+    // The constraint sum(x) <= norm2(x) has affine LHS <= convex RHS
+    // This becomes norm2(x) - sum(x) >= 0, which has convex LHS
+    // DCP requires concave >= 0, not convex >= 0
+    let prob = Problem::minimize(sum(&x))
+        .subject_to([sum(&x).leq(&norm2(&x))]) // affine <= convex is not DCP
+        .build();
+    assert!(!prob.is_dcp(), "affine <= convex should not be DCP");
+}
+
+// ============================================================================
+// Edge case tests
+// ============================================================================
+
+/// Test single-element variable
+#[test]
+fn test_single_element() {
+    let x = variable(1);
+    let prob = Problem::minimize(sum(&x))
+        .subject_to([x.geq(&constant(5.0))])
+        .build();
+
+    let solution = prob.solve().expect("should solve");
+    let value = solution.value.expect("should have value");
+    assert!((value - 5.0).abs() < TOL, "single element: expected 5, got {}", value);
+}
+
+/// Test with constant objective (no variables in objective)
+#[test]
+fn test_constant_objective() {
+    let x = variable(3);
+    // Objective is just constant 1.0
+    let prob = Problem::minimize(constant(1.0))
+        .subject_to([x.geq(&constant(0.0))])
+        .build();
+
+    let solution = prob.solve().expect("should solve");
+    let value = solution.value.expect("should have value");
+    assert!((value - 1.0).abs() < TOL, "constant obj: expected 1, got {}", value);
+}
+
+/// Test tight constraint
+#[test]
+fn test_tight_constraints() {
+    let x = variable(2);
+    // x1 + x2 = 3, x1 - x2 = 1 → x1 = 2, x2 = 1
+    // minimize sum(x) = 3
+    let prob = Problem::minimize(sum(&x))
+        .subject_to([
+            sum(&x).equals(&constant(3.0)),
+            (&x - &constant_vec(vec![0.0, 2.0])).equals(&constant_vec(vec![2.0, -1.0])),
+        ])
+        .build();
+
+    let solution = prob.solve().expect("should solve");
+    let value = solution.value.expect("should have value");
+    assert!((value - 3.0).abs() < TOL, "tight constraints: expected 3, got {}", value);
+}
+
+// ============================================================================
+// Scale tests (medium-sized problems)
+// ============================================================================
+
+/// Test with 100 variables (LP)
+#[test]
+fn test_scale_100_variables_lp() {
+    let x = variable(100);
+    // minimize sum(x) s.t. x >= 1
+    let prob = Problem::minimize(sum(&x))
+        .subject_to([x.geq(&constant(1.0))])
+        .build();
+
+    let solution = prob.solve().expect("should solve 100-var LP");
+    assert_eq!(solution.status, SolveStatus::Optimal);
+
+    let value = solution.value.expect("should have value");
+    let expected = 100.0;
+    assert!((value - expected).abs() < TOL * 100.0, "100-var LP: expected {}, got {}", expected, value);
+}
+
+/// Test with 50 variables (SOCP)
+#[test]
+fn test_scale_50_variables_socp() {
+    let x = variable(50);
+    // minimize ||x||_2 s.t. sum(x) = 50
+    // optimal: x = [1, 1, ..., 1], ||x||_2 = sqrt(50)
+    let prob = Problem::minimize(norm2(&x))
+        .subject_to([sum(&x).equals(&constant(50.0))])
+        .build();
+
+    let solution = prob.solve().expect("should solve 50-var SOCP");
+    assert_eq!(solution.status, SolveStatus::Optimal);
+
+    let value = solution.value.expect("should have value");
+    let expected = (50.0_f64).sqrt();
+    let rel_err = (value - expected).abs() / (1.0 + expected.abs());
+    assert!(rel_err < TOL, "50-var SOCP: expected {}, got {} (rel_err={})", expected, value, rel_err);
+}
+
+/// Test with 30 variables (QP)
+#[test]
+fn test_scale_30_variables_qp() {
+    let x = variable(30);
+    // minimize ||x||_2^2 s.t. sum(x) = 30
+    // optimal: x = [1, 1, ..., 1], ||x||^2 = 30
+    let prob = Problem::minimize(sum_squares(&x))
+        .subject_to([sum(&x).equals(&constant(30.0))])
+        .build();
+
+    let solution = prob.solve().expect("should solve 30-var QP");
+    assert_eq!(solution.status, SolveStatus::Optimal);
+
+    let value = solution.value.expect("should have value");
+    let expected = 30.0;
+    let rel_err = (value - expected).abs() / (1.0 + expected.abs());
+    assert!(rel_err < TOL, "30-var QP: expected {}, got {} (rel_err={})", expected, value, rel_err);
 }
