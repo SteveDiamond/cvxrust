@@ -29,10 +29,8 @@
 //!
 //! cvxrust enforces Disciplined Convex Programming rules:
 //!
-//! - **Minimization** requires a **convex** objective
-//! - **Maximization** requires a **concave** objective
-//! - **Equality constraints** require **affine** expressions
-//! - **Inequality constraints** (>=) require **concave** left-hand side
+//! - **Objective:** `minimize(convex)` or `maximize(concave)`
+//! - **Constraints:** `convex <= concave`, `concave >= convex`, `affine == affine`
 //!
 //! ## Supported Atoms
 //!

@@ -217,29 +217,15 @@ let solution = Problem::minimize(log_sum_exp_loss)
 
 cvxrust enforces disciplined convex programming rules:
 
-- **Minimization** requires a **convex** objective
-- **Maximization** requires a **concave** objective
-- **Equality constraints** require **affine** expressions on both sides
-- **Inequality constraints** (`>=`) require the left side to be **concave**
-- **Inequality constraints** (`<=`) require the left side to be **convex**
+**Objective:**
+- `minimize(convex)` or `maximize(concave)`
+
+**Constraints:**
+- `convex <= concave`
+- `concave >= convex`
+- `affine == affine`
 
 Problems that violate these rules will return a `DcpError`.
-
-```rust
-let x = variable(5);
-
-// Valid: minimize convex
-Problem::minimize(norm2(&x));
-
-// Valid: maximize concave
-Problem::maximize(-sum_squares(&x));
-
-// Invalid: minimize concave - returns DcpError
-Problem::minimize(-norm2(&x));
-
-// Invalid: norm2(x) >= 1 (convex >= constant) - returns DcpError
-constraint!((norm2(&x)) >= 1.0);
-```
 
 ## Architecture
 

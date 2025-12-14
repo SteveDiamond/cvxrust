@@ -1411,7 +1411,7 @@ mod stress_tests {
         let value = solution.value.expect("should have value");
         // Should be around 1.0 (0.5 + 0.5)
         assert!(
-            value >= 0.99 && value <= 1.5,
+            (0.99..=1.5).contains(&value),
             "multiple SOCP: got {}",
             value
         );

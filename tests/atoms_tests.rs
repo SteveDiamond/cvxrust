@@ -275,7 +275,7 @@ fn test_dual_values_simple() {
     assert!(solution.has_duals());
 
     let duals = solution.duals().unwrap();
-    assert!(duals.len() > 0, "Should have dual values");
+    assert!(!duals.is_empty(), "Should have dual values");
 
     // The dual of a binding constraint should be positive
     let dual_0 = solution.constraint_dual(0).unwrap();
