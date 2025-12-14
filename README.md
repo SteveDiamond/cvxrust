@@ -77,6 +77,7 @@ cargo doc --open
 | **QP** | Quadratic (convex) | Linear equality/inequality |
 | **SOCP** | Linear | Second-order cone |
 | **Exp Cone** | Exponential/log | Exponential cone |
+| **Power Cone** | Powers/geo mean | Power cone |
 | **Mixed** | Any convex | Combination of above |
 
 ## Expression Atoms
